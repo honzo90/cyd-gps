@@ -207,7 +207,7 @@ a.btn{border-radius:6px;border:1px solid #3a434c;background:#2a3138;color:#e8ece
  <small>Plik .pio/build/cyd2usb/firmware.bin. Jeśli nowa wersja nie uruchomi Wi‑Fi w 15 s, CYD wróci do poprzedniej.</small>
 </div>
 
-<script src="/rides.js"></script>
+<script src="/rides.js?v=)HTML" FW_VERSION R"HTML("></script>
 <script>
 const $=id=>document.getElementById(id);
 const fmtKm=v=>v.toFixed(2)+' km';
