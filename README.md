@@ -14,7 +14,8 @@ Arduino-ESP32 2.0.17 + LVGL 9.2, PlatformIO.
 | RX  | IO22 |
 
 Baud rate is detected automatically (115200 tried first). A micro-SD card (FAT32) in the CYD
-slot receives the GPX tracks.
+slot receives the GPX tracks: a point every 5 m while moving (receiver speed >= 3 km/h), nothing
+while standing, position jumps (implied speed > 2 x receiver speed + 15 km/h) skipped.
 
 ## Screens (swipe left/right)
 

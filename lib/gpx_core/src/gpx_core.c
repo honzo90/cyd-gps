@@ -5,23 +5,33 @@
 const char GPX_FOOTER[] = "  </trkseg>\n </trk>\n</gpx>\n";
 const char GPX_NEW_SEG[] = "  </trkseg>\n  <trkseg>\n";
 
-gpx_decision_t gpx_decide(gpx_last_t *last, double lat, double lon, float hdop, uint8_t sats, uint32_t t_ms)
+gpx_decision_t gpx_decide(gpx_last_t *last, double lat, double lon, float hdop, uint8_t sats, float speed_kmh,
+                          uint32_t t_ms)
 {
     if (hdop <= 0 || hdop > GPX_MAX_HDOP || sats < GPX_MIN_SATS) {
         return GPX_SKIP;  // a bad fix does not count as "seen", so a long bad stretch opens a new segment
     }
-    const bool gap = last->have && t_ms - last->seen_ms > GPX_SEG_GAP_MS;
+    bool new_seg = last->have && t_ms - last->seen_ms > GPX_SEG_GAP_MS;
     last->seen_ms = t_ms;
-    if (last->have && !gap) {
+    if (last->have && !new_seg) {
         const uint32_t dt = t_ms - last->t_ms;
-        if (dt < GPX_MIN_DT_MS) {
+        if (dt < GPX_MIN_DT_MS || speed_kmh < GPX_MIN_SPEED_KMH) {
             return GPX_SKIP;
         }
-        if (odo_dist_m(last->lat, last->lon, lat, lon) < GPX_MIN_MOVE_M && dt < GPX_MAX_IDLE_MS) {
+        const double d = odo_dist_m(last->lat, last->lon, lat, lon);
+        if (d < GPX_MIN_MOVE_M) {
             return GPX_SKIP;
+        }
+        const double implied_kmh = d / (dt / 1000.0) * 3.6;
+        if (implied_kmh > speed_kmh * GPX_JUMP_FACTOR + GPX_JUMP_MARGIN_KMH) {
+            if (++last->jumps < GPX_MAX_JUMPS) {
+                return GPX_SKIP;
+            }
+            new_seg = true;  // persistent: the old reference point was the wrong one
         }
     }
-    const gpx_decision_t d = gap ? GPX_LOG_NEW_SEG : GPX_LOG;
+    last->jumps = 0;
+    const gpx_decision_t d = new_seg ? GPX_LOG_NEW_SEG : GPX_LOG;
     last->have = true;
     last->lat = lat;
     last->lon = lon;

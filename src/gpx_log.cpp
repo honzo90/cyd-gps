@@ -117,7 +117,8 @@ void gpx_log_feed(const gps_data_t *g)
     if (!s_mounted || !g->fix || !g->time_valid || !g->date_valid) {
         return;
     }
-    const gpx_decision_t d = gpx_decide(&s_last, g->lat, g->lon, (float)g->hdop, (uint8_t)g->sats, g->fix_ms);
+    const gpx_decision_t d = gpx_decide(&s_last, g->lat, g->lon, (float)g->hdop, (uint8_t)g->sats,
+                                         (float)g->speed_kmh, g->fix_ms);
     if (d == GPX_SKIP) {
         return;
     }

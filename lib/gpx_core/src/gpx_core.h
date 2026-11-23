@@ -9,8 +9,14 @@ extern "C" {
 #endif
 
 #define GPX_MIN_MOVE_M 5.0      // log a point after moving this far ...
-#define GPX_MAX_IDLE_MS 30000   // ... or after this long without moving
+#define GPX_MIN_SPEED_KMH 3.0f  // ... while the receiver reports at least this speed (standing: no points,
+                                // so position drift does not add distance; same rule as the odometer)
 #define GPX_MIN_DT_MS 1000      // never more often than this
+// A point implying a speed above 2 x the receiver's speed + 15 km/h is a position jump: skipped.
+// After GPX_MAX_JUMPS such points in a row the position is taken as real and a new segment starts.
+#define GPX_JUMP_FACTOR 2.0f
+#define GPX_JUMP_MARGIN_KMH 15.0f
+#define GPX_MAX_JUMPS 3
 #define GPX_SEG_GAP_MS 5000     // no fix for longer: start a new <trkseg>
 #define GPX_MAX_HDOP 4.0f
 #define GPX_MIN_SATS 4
@@ -30,12 +36,15 @@ typedef struct {
     double lat, lon;
     uint32_t t_ms;   // when that point's fix arrived
     uint32_t seen_ms;  // last good fix seen (for gap detection)
+    uint8_t jumps;     // consecutive points rejected as position jumps
 } gpx_last_t;
 
 typedef enum { GPX_SKIP = 0, GPX_LOG, GPX_LOG_NEW_SEG } gpx_decision_t;
 
 // Decide what to do with a fix that arrived at t_ms. Updates *last when the point is to be logged.
-gpx_decision_t gpx_decide(gpx_last_t *last, double lat, double lon, float hdop, uint8_t sats, uint32_t t_ms);
+// speed_kmh is the receiver's own (Doppler) speed, not one derived from positions.
+gpx_decision_t gpx_decide(gpx_last_t *last, double lat, double lon, float hdop, uint8_t sats, float speed_kmh,
+                          uint32_t t_ms);
 
 // "/gpx/20261123-114602.gpx"
 int gpx_filename(char *buf, size_t n, const gpx_pt_t *p);
