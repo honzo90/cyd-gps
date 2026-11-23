@@ -17,12 +17,29 @@
 #include "web.h"
 #include "odometer.h"
 #include "seg7.h"
+#include "nav_core.h"
+#include <math.h>
 
 static const uint32_t k_bg = 0x101418, k_caption = 0x7F8A94, k_dim = 0x5A646E;
 
 // Speedometer
 static seg7_t s_seg;
-static lv_obj_t *s_spd_status, *s_spd_bar, *s_spd_scale, *s_spd_info;
+static lv_obj_t *s_spd_status, *s_spd_bar, *s_spd_scale, *s_spd_info, *s_dir_arrow, *s_dir_text;
+static bool s_dir_shown;
+static lv_point_precise_t s_arrow_pts[5];  // lv_line keeps a pointer: must stay alive
+
+// Arrow 24 x 24 px pointing along the course (0 = up = north), clockwise like a compass.
+static void set_arrow(float deg)
+{
+    static const float k_shape[5][2] = {{0, -10}, {7, 8}, {0, 3}, {-7, 8}, {0, -10}};
+    const float r = deg * (float)M_PI / 180.0f, c = cosf(r), s = sinf(r);
+    for (int i = 0; i < 5; ++i) {
+        const float x = k_shape[i][0], y = k_shape[i][1];
+        s_arrow_pts[i].x = (lv_value_precise_t)lroundf(12 + x * c - y * s);
+        s_arrow_pts[i].y = (lv_value_precise_t)lroundf(12 + x * s + y * c);
+    }
+    lv_line_set_points(s_dir_arrow, s_arrow_pts, 5);
+}
 // Wi-Fi screen
 static lv_obj_t *s_wifi_info, *s_wifi_btn_label, *s_gh_btn, *s_gh_btn_label, *s_chk_btn, *s_chk_btn_label;
 // GPS screen
@@ -157,6 +174,14 @@ static void refresh_speedo(const gps_data_t &g)
         lv_bar_set_range(s_spd_bar, 0, scale);
         lv_bar_set_value(s_spd_bar, shown > scale ? scale : shown, LV_ANIM_OFF);
         lv_label_set_text_fmt(s_spd_scale, "0 - %d", scale);
+    }
+    if (nav_show(&s_dir_shown, g.fix, g.course_valid, (float)g.speed_kmh)) {
+        set_arrow((float)g.course_deg);
+        lv_obj_remove_flag(s_dir_arrow, LV_OBJ_FLAG_HIDDEN);
+        lv_label_set_text_fmt(s_dir_text, "%s %d\xC2\xB0", nav_cardinal((float)g.course_deg), nav_deg((float)g.course_deg));
+    } else {
+        lv_obj_add_flag(s_dir_arrow, LV_OBJ_FLAG_HIDDEN);
+        lv_label_set_text(s_dir_text, "--");
     }
     char buf[64];
     snprintf(buf, sizeof buf, "Trip %.2f km    Max %.0f    Sat %u", o->trip_m / 1000.0, o->max_kmh, (unsigned)g.sats);
@@ -429,6 +454,17 @@ static void build_speedo_screen(lv_obj_t *t)
     lv_obj_set_style_bg_color(s_spd_bar, lv_color_hex(0x1A2026), 0);
     lv_obj_set_style_bg_color(s_spd_bar, lv_color_hex(0x4CD97B), LV_PART_INDICATOR);
     lv_obj_remove_flag(s_spd_bar, LV_OBJ_FLAG_CLICKABLE);
+
+    // direction of travel (GPS course, shown from 5 km/h): arrow + "NE 47°" between scale and unit
+    s_dir_arrow = lv_line_create(t);
+    lv_obj_set_size(s_dir_arrow, 24, 24);
+    lv_obj_set_pos(s_dir_arrow, 112, 167);
+    lv_obj_set_style_line_width(s_dir_arrow, 3, 0);
+    lv_obj_set_style_line_color(s_dir_arrow, lv_color_hex(0x4CD97B), 0);
+    lv_obj_set_style_line_rounded(s_dir_arrow, true, 0);
+    set_arrow(0);
+    lv_obj_add_flag(s_dir_arrow, LV_OBJ_FLAG_HIDDEN);
+    s_dir_text = make_label(t, &lv_font_montserrat_20, 0xFFFFFF, 142, 168, "--");
 
     s_spd_info = make_label(t, &lv_font_montserrat_14, 0x9AA4AE, 0, 0, "");
     lv_obj_align(s_spd_info, LV_ALIGN_BOTTOM_MID, 0, -8);

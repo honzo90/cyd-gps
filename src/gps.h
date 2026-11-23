@@ -20,6 +20,7 @@ struct gps_data_t {
     double alt_m;
     double speed_kmh;
     double course_deg;
+    bool course_valid;  // from a fix in the last 2 s (TinyGPS keeps the old value otherwise)
     uint32_t sats;
     double hdop;
     bool time_valid;

@@ -383,6 +383,7 @@ void gps_get(gps_data_t *o)
     o->alt_m = s_gps.altitude.isValid() ? s_gps.altitude.meters() : 0;
     o->speed_kmh = s_gps.speed.isValid() ? s_gps.speed.kmph() : 0;
     o->course_deg = s_gps.course.isValid() ? s_gps.course.deg() : 0;
+    o->course_valid = s_gps.course.isValid() && s_gps.course.age() < 2000;
     o->sats = s_gps.satellites.isValid() ? s_gps.satellites.value() : 0;
     o->hdop = s_gps.hdop.isValid() ? s_gps.hdop.hdop() : 0;
     o->time_valid = s_gps.time.isValid();

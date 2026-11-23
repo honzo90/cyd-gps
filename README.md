@@ -19,7 +19,7 @@ while standing, position jumps (implied speed > 2 x receiver speed + 15 km/h) sk
 
 ## Screens (swipe left/right)
 
-1. Speedometer (large seven-segment digits)
+1. Speedometer (large seven-segment digits) with the direction of travel from the GPS course (arrow + N/NE/E..., from 5 km/h; no compass in the module)
 2. Acceleration timer (POMIAR)
 3. Odometer: trip, total, max, average, moving time; long-press "Zeruj trip" resets the trip and starts a new GPX file
 4. GPS: position, altitude, satellites, HDOP, UTC, signal strength
