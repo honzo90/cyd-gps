@@ -196,7 +196,7 @@ static void refresh_wifi()
         } else {
             len += snprintf(info + len, sizeof info - len, "Hotspot: wylaczony\n");
         }
-        len += snprintf(info + len, sizeof info - len, "Login: %s   Haslo: %s\n", net_user(), n.dev_pass);
+        len += snprintf(info + len, sizeof info - len, "Login: %s   Haslo: ******  (QR)\n", net_user());
         len += snprintf(info + len, sizeof info - len, "Czas NTP: %s   FW %s\n", n.ntp_ok ? "tak" : "nie", FW_VERSION);
         gh_ota_text(info + len, sizeof info - len);
     }
@@ -317,6 +317,102 @@ static void on_gh_install(lv_event_t *)
     gh_ota_install();
 }
 
+// ---- QR login overlay: one-time link + password, closes itself after WEB_LOGIN_CODE_MS ----
+static lv_obj_t *s_qr_panel, *s_qr_left;
+static lv_timer_t *s_qr_timer;
+static uint32_t s_qr_at;
+
+static void qr_close()
+{
+    if (!s_qr_panel) {
+        return;
+    }
+    web_login_cancel();
+    lv_timer_delete(s_qr_timer);
+    lv_obj_delete(s_qr_panel);  // frees the QR canvas
+    s_qr_panel = NULL;
+    s_qr_timer = NULL;
+}
+
+static void qr_tick(lv_timer_t *)
+{
+    const uint32_t gone = millis() - s_qr_at;
+    if (gone >= WEB_LOGIN_CODE_MS) {
+        qr_close();
+        return;
+    }
+    const uint32_t left = (WEB_LOGIN_CODE_MS - gone + 999) / 1000;
+    lv_label_set_text_fmt(s_qr_left, "Wazny %lu:%02lu", (unsigned long)(left / 60), (unsigned long)(left % 60));
+}
+
+static void on_qr_close(lv_event_t *)
+{
+    qr_close();
+}
+
+static void on_logout_all(lv_event_t *)
+{
+    web_logout_all();
+    qr_close();
+}
+
+static void on_qr_open(lv_event_t *)
+{
+    char url[96];
+    if (s_qr_panel || !web_login_url(url, sizeof url)) {
+        return;
+    }
+    net_status_t n;
+    net_get(&n);
+    s_qr_panel = lv_obj_create(lv_layer_top());
+    lv_obj_remove_style_all(s_qr_panel);
+    lv_obj_set_size(s_qr_panel, 320, 240);
+    lv_obj_set_style_bg_color(s_qr_panel, lv_color_hex(0x101418), 0);
+    lv_obj_set_style_bg_opa(s_qr_panel, LV_OPA_COVER, 0);
+    lv_obj_add_flag(s_qr_panel, LV_OBJ_FLAG_CLICKABLE);  // swallow touches meant for the tiles below
+
+    // White square with a quiet zone: phones read it much more reliably.
+    lv_obj_t *bg = lv_obj_create(s_qr_panel);
+    lv_obj_remove_style_all(bg);
+    lv_obj_set_size(bg, 176, 176);
+    lv_obj_set_pos(bg, 8, 8);
+    lv_obj_set_style_bg_color(bg, lv_color_white(), 0);
+    lv_obj_set_style_bg_opa(bg, LV_OPA_COVER, 0);
+    lv_obj_t *qr = lv_qrcode_create(bg);
+    lv_qrcode_set_size(qr, 160);
+    lv_qrcode_set_dark_color(qr, lv_color_black());
+    lv_qrcode_set_light_color(qr, lv_color_white());
+    lv_qrcode_update(qr, url, strlen(url));
+    lv_obj_center(qr);
+
+    make_label(s_qr_panel, &lv_font_montserrat_20, 0xFFFFFF, 196, 10, "Zeskanuj\ntelefonem");
+    lv_obj_t *info = make_label(s_qr_panel, &lv_font_montserrat_14, 0xC8D0D8, 196, 66, "");
+    lv_label_set_text_fmt(info, "Strona bez hasla\nprzez 30 dni.\n\nHaslo (%s):\n%s", net_user(), n.dev_pass);
+    s_qr_left = make_label(s_qr_panel, &lv_font_montserrat_14, 0xFFB347, 196, 160, "");
+
+    lv_obj_t *close = lv_button_create(s_qr_panel);
+    lv_obj_set_size(close, 96, 34);
+    lv_obj_align(close, LV_ALIGN_BOTTOM_RIGHT, -8, -6);
+    lv_obj_set_style_bg_color(close, lv_color_hex(0x2A3138), 0);
+    lv_obj_t *cl = lv_label_create(close);
+    lv_label_set_text(cl, "Zamknij");
+    lv_obj_center(cl);
+    lv_obj_add_event_cb(close, on_qr_close, LV_EVENT_CLICKED, NULL);
+
+    lv_obj_t *out = lv_button_create(s_qr_panel);
+    lv_obj_set_size(out, 104, 34);
+    lv_obj_align(out, LV_ALIGN_BOTTOM_RIGHT, -112, -6);
+    lv_obj_set_style_bg_color(out, lv_color_hex(0x5A2424), 0);
+    lv_obj_t *ol = lv_label_create(out);
+    lv_label_set_text(ol, "Wyloguj tel.");
+    lv_obj_center(ol);
+    lv_obj_add_event_cb(out, on_logout_all, LV_EVENT_LONG_PRESSED, NULL);  // all phones: long press
+
+    s_qr_at = millis();
+    s_qr_timer = lv_timer_create(qr_tick, 500, NULL);
+    qr_tick(NULL);
+}
+
 static void on_gh_check(lv_event_t *)
 {
     gh_ota_check_now();
@@ -328,6 +424,16 @@ static void build_wifi_screen(lv_obj_t *t)
 {
     make_label(t, &lv_font_montserrat_20, 0xFFFFFF, 12, 8, LV_SYMBOL_LEFT "  WI-FI");
     s_wifi_info = make_label(t, &lv_font_montserrat_14, 0xE8ECEF, 12, 42, "");
+
+    // QR login: long press, so the password and code are not shown by a stray touch.
+    lv_obj_t *qr = lv_button_create(t);
+    lv_obj_set_size(qr, 64, 30);
+    lv_obj_align(qr, LV_ALIGN_TOP_RIGHT, -8, 6);
+    lv_obj_set_style_bg_color(qr, lv_color_hex(0x2A3138), 0);
+    lv_obj_t *ql = lv_label_create(qr);
+    lv_label_set_text(ql, "QR");
+    lv_obj_center(ql);
+    lv_obj_add_event_cb(qr, on_qr_open, LV_EVENT_LONG_PRESSED, NULL);
     lv_obj_set_width(s_wifi_info, 296);
     lv_obj_set_style_text_line_space(s_wifi_info, 6, 0);
 

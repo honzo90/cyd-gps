@@ -2,6 +2,7 @@
 #include <Arduino.h>
 #include <SD.h>
 #include <Update.h>
+#include <Preferences.h>
 #include <WebServer.h>
 #include <esp_ota_ops.h>
 #include <string.h>
@@ -14,6 +15,132 @@ static portMUX_TYPE s_snap_mux = portMUX_INITIALIZER_UNLOCKED;
 static web_snapshot_t s_snap;
 static bool s_update_ok;
 static char s_update_err[64];
+
+// ---- QR login -------------------------------------------------------------------------------
+// One-time code: written by the loop task (screen), checked and consumed by the web task.
+static portMUX_TYPE s_login_mux = portMUX_INITIALIZER_UNLOCKED;
+static char s_code[21];
+static uint32_t s_code_at;
+static bool s_logout_req;
+// Sessions: owned by the web task, kept in NVS ("web"/"sess") so an OTA reboot keeps phones logged in.
+static const int k_sessions = 4;  // newest first; a 5th login drops the oldest
+static const int k_tok = 32;
+static char s_sess[k_sessions][k_tok + 1];
+static Preferences s_web_nvs;
+
+static void random_token(char *out, int len)
+{
+    static const char k_chars[] = "abcdefghjkmnpqrstuvwxyz23456789";  // 31 symbols, ~4.95 bits each
+    for (int i = 0; i < len; ++i) {
+        out[i] = k_chars[esp_random() % (sizeof k_chars - 1)];
+    }
+    out[len] = 0;
+}
+
+static bool same(const char *a, const char *b, size_t n)  // constant time
+{
+    uint8_t d = 0;
+    for (size_t i = 0; i < n; ++i) {
+        d |= (uint8_t)(a[i] ^ b[i]);
+    }
+    return d == 0;
+}
+
+static void save_sessions()
+{
+    s_web_nvs.putBytes("sess", s_sess, sizeof s_sess);
+}
+
+static void handle_logout_request()
+{
+    bool req;
+    portENTER_CRITICAL(&s_login_mux);
+    req = s_logout_req;
+    s_logout_req = false;
+    portEXIT_CRITICAL(&s_login_mux);
+    if (req) {
+        memset(s_sess, 0, sizeof s_sess);
+        save_sessions();
+        Serial.println("WEB: all browser logins forgotten");
+    }
+}
+
+static bool session_ok()
+{
+    const String c = s_server.header("Cookie");
+    const int at = c.indexOf("cyd_s=");
+    if (at < 0 || c.length() < (unsigned)(at + 6 + k_tok)) {
+        return false;
+    }
+    const char *tok = c.c_str() + at + 6;
+    for (int i = 0; i < k_sessions; ++i) {
+        if (s_sess[i][0] && same(tok, s_sess[i], k_tok)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool web_login_url(char *buf, size_t n)
+{
+    net_status_t ns;
+    net_get(&ns);
+    const char *ip = ns.sta_connected ? ns.sta_ip : ns.ap_on ? ns.ap_ip : "";
+    if (!ip[0]) {
+        return false;
+    }
+    char code[sizeof s_code];
+    random_token(code, sizeof code - 1);
+    portENTER_CRITICAL(&s_login_mux);
+    memcpy(s_code, code, sizeof s_code);
+    s_code_at = millis();
+    portEXIT_CRITICAL(&s_login_mux);
+    snprintf(buf, n, "http://%s/login?t=%s", ip, code);
+    return true;
+}
+
+void web_login_cancel()
+{
+    portENTER_CRITICAL(&s_login_mux);
+    memset(s_code, 0, sizeof s_code);
+    portEXIT_CRITICAL(&s_login_mux);
+}
+
+void web_logout_all()
+{
+    web_login_cancel();
+    portENTER_CRITICAL(&s_login_mux);
+    s_logout_req = true;
+    portEXIT_CRITICAL(&s_login_mux);
+}
+
+static void handle_login()
+{
+    const String t = s_server.arg("t");
+    bool ok = false;
+    portENTER_CRITICAL(&s_login_mux);
+    if (s_code[0] && t.length() == sizeof s_code - 1 && millis() - s_code_at < WEB_LOGIN_CODE_MS &&
+        same(t.c_str(), s_code, sizeof s_code - 1)) {
+        ok = true;
+        memset(s_code, 0, sizeof s_code);  // one use only
+    }
+    portEXIT_CRITICAL(&s_login_mux);
+    if (!ok) {
+        s_server.send(403, "text/html; charset=utf-8",
+                      "<meta name=viewport content='width=device-width'><body style='font-family:system-ui'>"
+                      "<h3>Kod logowania wygasł albo został już użyty</h3>"
+                      "<p>Na CYD: ekran WI-FI, przytrzymaj „QR” i zeskanuj nowy kod.</p>");
+        return;
+    }
+    memmove(s_sess[1], s_sess[0], sizeof s_sess - sizeof s_sess[0]);
+    random_token(s_sess[0], k_tok);
+    save_sessions();
+    Serial.println("WEB: browser logged in with the QR code");
+    s_server.sendHeader("Set-Cookie", String("cyd_s=") + s_sess[0] +
+                                          "; Max-Age=2592000; Path=/; HttpOnly; SameSite=Lax");
+    s_server.sendHeader("Location", "/");
+    s_server.send(302, "text/plain", "");
+}
 
 static const char k_page[] PROGMEM = R"HTML(<!doctype html>
 <html lang="pl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -115,7 +242,7 @@ live();files();setInterval(live,1000);setInterval(files,15000);
 
 static bool auth()
 {
-    if (s_server.authenticate(net_user(), net_password())) {
+    if (session_ok() || s_server.authenticate(net_user(), net_password())) {
         return true;
     }
     s_server.requestAuthentication(BASIC_AUTH, "CYD GPS");
@@ -318,7 +445,7 @@ static void handle_update_upload()
     if (up.status == UPLOAD_FILE_START) {
         s_update_ok = false;
         s_update_err[0] = 0;
-        if (!s_server.authenticate(net_user(), net_password())) {
+        if (!session_ok() && !s_server.authenticate(net_user(), net_password())) {
             snprintf(s_update_err, sizeof s_update_err, "brak autoryzacji");
             return;
         }
@@ -391,6 +518,7 @@ static void handle_gh_install()
 static void server_task(void *)
 {
     for (;;) {
+        handle_logout_request();
         s_server.handleClient();
         vTaskDelay(pdMS_TO_TICKS(2));
     }
@@ -398,6 +526,16 @@ static void server_task(void *)
 
 void web_begin()
 {
+    s_web_nvs.begin("web", false);
+    if (s_web_nvs.getBytes("sess", s_sess, sizeof s_sess) != sizeof s_sess) {
+        memset(s_sess, 0, sizeof s_sess);
+    }
+    for (auto &s : s_sess) {
+        s[k_tok] = 0;
+    }
+    static const char *k_headers[] = {"Cookie"};
+    s_server.collectHeaders(k_headers, 1);
+    s_server.on("/login", HTTP_GET, handle_login);
     s_server.on("/", HTTP_GET, handle_root);
     s_server.on("/api/status", HTTP_GET, handle_status);
     s_server.on("/api/files", HTTP_GET, handle_files);

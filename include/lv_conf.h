@@ -10,5 +10,6 @@
 #define LV_FONT_MONTSERRAT_20 1
 #define LV_FONT_MONTSERRAT_32 1  // trip distance
 #define LV_FONT_DEFAULT &lv_font_montserrat_14
+#define LV_USE_QRCODE 1  // QR login on the Wi-Fi screen (~3 KB of LVGL heap only while shown)
 
 #endif

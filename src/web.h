@@ -2,6 +2,7 @@
 // device password. Live data, GPX files (download/delete), home Wi-Fi settings, firmware update.
 // Runs in its own task; it never touches GPS/odometer state directly, only the snapshot below.
 #pragma once
+#include <stddef.h>
 #include <stdint.h>
 
 struct web_snapshot_t {
@@ -19,3 +20,11 @@ struct web_snapshot_t {
 
 void web_begin();                              // starts the server task (once)
 void web_publish(const web_snapshot_t *s);     // from the loop task, ~2x per second
+
+// QR login. web_login_url() makes a new one-time code (valid 2 min, replaces the previous one) and
+// writes "http://<ip>/login?t=<code>"; false when there is no network. Opening the link logs that
+// browser in for 30 days (cookie), without the password. Call from the loop task.
+static const uint32_t WEB_LOGIN_CODE_MS = 120000;
+bool web_login_url(char *buf, size_t n);
+void web_login_cancel();
+void web_logout_all();  // forget every logged-in browser (the password keeps working)

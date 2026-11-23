@@ -31,6 +31,11 @@ and shown on the Wi-Fi screen. Open `http://192.168.4.1` (user `cyd`, same passw
 data, GPX download/delete, home Wi-Fi settings and firmware upload. No credentials are stored
 in this repository.
 
+QR login: long-press "QR" on the Wi-Fi screen. It shows a one-time link (valid 2 minutes, one use)
+and the device password; scanning it opens the page logged in for 30 days (cookie, up to 4
+browsers, kept across reboots). "Wyloguj tel." (long press) logs all browsers out. The password
+is not shown on the Wi-Fi screen otherwise.
+
 ## Updates from GitHub
 
 In the home network the CYD checks `releases/latest/download/version.txt` after start-up and
