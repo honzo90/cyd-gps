@@ -471,6 +471,22 @@ static void serial_commands()
 
 void loop()
 {
+#ifdef ROLLBACK_TEST
+    // Deliberately broken release: crashes before the 15 s health check confirms it, so the
+    // bootloader must fall back to the previous firmware. Never publish this build.
+    static bool warned;
+    if (!warned) {
+        warned = true;
+        lv_obj_t *w = make_label(lv_layer_top(), &lv_font_montserrat_20, 0xFF5A5A, 0, 0, "TEST ROLLBACK: crash za 8 s");
+        lv_obj_align(w, LV_ALIGN_CENTER, 0, 0);
+        Serial.println("ROLLBACK TEST: running " FW_VERSION ", crashing at 8 s");
+    }
+    if (millis() > 8000) {
+        Serial.println("ROLLBACK TEST: abort()");
+        Serial.flush();
+        abort();
+    }
+#endif
     serial_commands();
     gps_poll();
     net_poll();
