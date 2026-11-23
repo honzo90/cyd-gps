@@ -34,7 +34,7 @@ in this repository.
 ## Updates from GitHub
 
 In the home network the CYD checks `releases/latest/download/version.txt` after start-up and
-every 6 hours and offers newer versions (install by long-pressing the button on the Wi-Fi
+every 6 hours ("Sprawdz aktualizacje" on the Wi-Fi screen checks at once) and offers newer versions (install by long-pressing the button on the Wi-Fi
 screen, or on the web page). A new image must run 15 s with the network up, otherwise the
 device rolls back to the previous one.
 

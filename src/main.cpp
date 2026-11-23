@@ -23,7 +23,7 @@ static const uint32_t k_bg = 0x101418, k_caption = 0x7F8A94, k_dim = 0x5A646E;
 static seg7_t s_seg;
 static lv_obj_t *s_spd_status, *s_spd_bar, *s_spd_scale, *s_spd_info;
 // Wi-Fi screen
-static lv_obj_t *s_wifi_info, *s_wifi_btn_label, *s_gh_btn, *s_gh_btn_label;
+static lv_obj_t *s_wifi_info, *s_wifi_btn_label, *s_gh_btn, *s_gh_btn_label, *s_chk_btn, *s_chk_btn_label;
 // GPS screen
 static lv_obj_t *s_status, *s_lat, *s_lon, *s_alt, *s_speed, *s_course, *s_sats, *s_hdop, *s_time, *s_diag;
 // Odometer screen
@@ -162,6 +162,15 @@ static void refresh_speedo(const gps_data_t &g)
     lv_label_set_text(s_spd_info, buf);
 }
 
+static void show(lv_obj_t *o, bool visible)
+{
+    if (visible) {
+        lv_obj_remove_flag(o, LV_OBJ_FLAG_HIDDEN);
+    } else {
+        lv_obj_add_flag(o, LV_OBJ_FLAG_HIDDEN);
+    }
+}
+
 static void refresh_wifi()
 {
     net_status_t n;
@@ -194,12 +203,18 @@ static void refresh_wifi()
     lv_label_set_text(s_wifi_info, info);
     gh_status_t gh;
     gh_ota_get(&gh);
-    if (gh.state == GH_AVAILABLE) {
+    // Same slot: "Instaluj x.y.z" when a newer release is known, otherwise "Sprawdz aktualizacje"
+    // (only in the home network: the hotspot has no internet).
+    const bool avail = gh.state == GH_AVAILABLE;
+    const bool can_check = n.enabled && n.sta_connected && !avail && gh.state != GH_INSTALLING;
+    if (avail) {
         lv_label_set_text_fmt(s_gh_btn_label, "Instaluj %s", gh.latest);
-        lv_obj_remove_flag(s_gh_btn, LV_OBJ_FLAG_HIDDEN);
-    } else {
-        lv_obj_add_flag(s_gh_btn, LV_OBJ_FLAG_HIDDEN);
     }
+    show(s_gh_btn, avail);
+    show(s_chk_btn, can_check);
+    const bool checking = gh.state == GH_CHECKING;
+    lv_obj_set_state(s_chk_btn, LV_STATE_DISABLED, checking);
+    lv_label_set_text(s_chk_btn_label, checking ? "Sprawdzam..." : "Sprawdz aktualizacje");
 }
 
 static void publish_web(const gps_data_t &g)
@@ -302,6 +317,13 @@ static void on_gh_install(lv_event_t *)
     gh_ota_install();
 }
 
+static void on_gh_check(lv_event_t *)
+{
+    gh_ota_check_now();
+    lv_obj_add_state(s_chk_btn, LV_STATE_DISABLED);  // feedback before the task picks it up
+    lv_label_set_text(s_chk_btn_label, "Sprawdzam...");
+}
+
 static void build_wifi_screen(lv_obj_t *t)
 {
     make_label(t, &lv_font_montserrat_20, 0xFFFFFF, 12, 8, LV_SYMBOL_LEFT "  WI-FI");
@@ -318,6 +340,16 @@ static void build_wifi_screen(lv_obj_t *t)
     lv_obj_center(s_gh_btn_label);
     lv_obj_add_event_cb(s_gh_btn, on_gh_install, LV_EVENT_LONG_PRESSED, NULL);
     lv_obj_add_flag(s_gh_btn, LV_OBJ_FLAG_HIDDEN);
+
+    // Check for updates: a plain click (it only asks GitHub, installs nothing).
+    s_chk_btn = lv_button_create(t);
+    lv_obj_set_size(s_chk_btn, 160, 34);
+    lv_obj_align(s_chk_btn, LV_ALIGN_BOTTOM_LEFT, 8, -6);
+    lv_obj_set_style_bg_color(s_chk_btn, lv_color_hex(0x2A3138), 0);
+    s_chk_btn_label = lv_label_create(s_chk_btn);
+    lv_obj_center(s_chk_btn_label);
+    lv_obj_add_event_cb(s_chk_btn, on_gh_check, LV_EVENT_CLICKED, NULL);
+    lv_obj_add_flag(s_chk_btn, LV_OBJ_FLAG_HIDDEN);
 
     lv_obj_t *btn = lv_button_create(t);
     lv_obj_set_size(btn, 140, 34);
