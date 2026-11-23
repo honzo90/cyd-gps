@@ -455,6 +455,8 @@ void setup()
 
 // Single-letter commands on the USB serial:
 //   n  toggle raw NMEA echo      T  zero the whole odometer (trip and total)
+// USB serial (115200): n = NMEA echo on/off, T = zero the whole odometer,
+// L = list GPX files, D <name> = delete a GPX file (D alone lists), ? = help.
 static void serial_commands()
 {
     while (Serial.available()) {
@@ -464,6 +466,23 @@ static void serial_commands()
             break;
         case 'T':
             odometer_reset_all();
+            break;
+        case 'L':
+            gpx_log_print_files();
+            break;
+        case 'D': {
+            String name = Serial.readStringUntil('\n');  // rest of the line, 1 s timeout
+            name.trim();
+            if (name.isEmpty()) {
+                gpx_log_print_files();
+                Serial.println("DEL: usage: D 20261123-114602.gpx");
+            } else {
+                Serial.printf("DEL: %s: %s\n", name.c_str(), gpx_log_delete(name.c_str()));
+            }
+            break;
+        }
+        case '?':
+            Serial.println("CMD: n NMEA echo, T zero odometer, L list GPX, D <name> delete GPX");
             break;
         }
     }

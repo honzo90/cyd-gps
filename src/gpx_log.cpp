@@ -173,3 +173,62 @@ void gpx_log_status(char *buf, size_t n)
         snprintf(buf, n, "SD: %s  %lu pkt", s_name, (unsigned long)s_points);
     }
 }
+
+bool gpx_log_valid_name(const char *n)
+{
+    const size_t len = strlen(n);
+    if (len < 5 || len > 30 || strcmp(n + len - 4, ".gpx") != 0) {
+        return false;
+    }
+    for (size_t i = 0; i < len - 4; ++i) {
+        if (!isdigit((unsigned char)n[i]) && n[i] != '-' && n[i] != '_') {
+            return false;
+        }
+    }
+    return true;
+}
+
+void gpx_log_print_files()
+{
+    if (!s_mounted) {
+        Serial.println("FILES: no SD card");
+        return;
+    }
+    File dir = SD.open("/gpx");
+    if (!dir) {
+        Serial.println("FILES: no /gpx directory");
+        return;
+    }
+    unsigned count = 0;
+    for (File f = dir.openNextFile(); f; f = dir.openNextFile()) {
+        const char *name = strrchr(f.name(), '/') ? strrchr(f.name(), '/') + 1 : f.name();
+        if (!f.isDirectory() && gpx_log_valid_name(name)) {
+            const bool active = s_file && strcmp(name, s_name) == 0;
+            Serial.printf("FILES: %s %lu B%s\n", name, (unsigned long)f.size(), active ? " (writing)" : "");
+            ++count;
+        }
+        f.close();
+    }
+    dir.close();
+    Serial.printf("FILES: %u file(s), card %llu MB used of %llu MB\n", count, SD.usedBytes() >> 20,
+                  SD.totalBytes() >> 20);
+}
+
+const char *gpx_log_delete(const char *name)
+{
+    if (!gpx_log_valid_name(name)) {
+        return "bad name (expected e.g. 20261123-114602.gpx)";
+    }
+    if (!s_mounted) {
+        return "no SD card";
+    }
+    if (s_file && strcmp(name, s_name) == 0) {
+        return "file is being written (reset the trip to close it first)";
+    }
+    char path[40];
+    snprintf(path, sizeof path, "/gpx/%s", name);
+    if (!SD.exists(path)) {
+        return "not found";
+    }
+    return SD.remove(path) ? "ok" : "remove failed";
+}

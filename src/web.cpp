@@ -6,6 +6,7 @@
 #include <esp_ota_ops.h>
 #include <string.h>
 #include "gh_ota.h"
+#include "gpx_log.h"
 #include "net.h"
 
 static WebServer s_server(80);
@@ -198,16 +199,7 @@ static void handle_status()
 // Only plain GPX names produced by gpx_log ("20261123-114602.gpx"): no paths, no "..".
 static bool valid_name(const String &n)
 {
-    if (n.length() < 5 || n.length() > 30 || !n.endsWith(".gpx")) {
-        return false;
-    }
-    for (size_t i = 0; i < n.length() - 4; ++i) {
-        const char c = n[i];
-        if (!isdigit((unsigned char)c) && c != '-' && c != '_') {
-            return false;
-        }
-    }
-    return true;
+    return gpx_log_valid_name(n.c_str());
 }
 
 static bool is_active(const String &name)

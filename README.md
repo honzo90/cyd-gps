@@ -53,4 +53,5 @@ pio run -e cyd2usb_sim -t upload # synthetic GPS data (no NVS writes)
 sh test/host/run.sh              # host tests for the odometer and GPX logic
 ```
 
-USB serial commands (115200): `n` toggles the raw NMEA echo, `T` zeroes the whole odometer.
+USB serial commands (115200): `n` toggles the raw NMEA echo, `T` zeroes the whole odometer,
+`L` lists the GPX files, `D 20261123-114602.gpx` deletes one (not the file being written), `?` help.
