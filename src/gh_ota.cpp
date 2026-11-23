@@ -41,6 +41,28 @@ static bool online()
     return WiFi.status() == WL_CONNECTED;  // home network (the hotspot has no internet)
 }
 
+// HTTPClient reports DNS and TLS failures alike as "connection refused": find out which.
+static void diagnose(char *e, size_t n)
+{
+    IPAddress ip;
+    const String dns = WiFi.dnsIP(0).toString();
+    if (!WiFi.hostByName("github.com", ip)) {
+        snprintf(e, n, "DNS nie dziala (serwer %s)", dns.c_str());
+    } else {
+        WiFiClientSecure t;
+        t.setCACert(gh_roots_pem_start);
+        if (t.connect("github.com", 443, 10000)) {
+            t.stop();
+            snprintf(e, n, "polaczenie OK przy 2. probie (heap %u)", (unsigned)ESP.getFreeHeap());
+        } else {
+            char tls[48] = "";
+            t.lastError(tls, sizeof tls);
+            snprintf(e, n, "TLS: %s (heap %u/%u)", tls, (unsigned)ESP.getFreeHeap(), (unsigned)ESP.getMaxAllocHeap());
+        }
+    }
+    Serial.printf("GH: diagnose: %s, dns %s, github.com=%s\n", e, dns.c_str(), ip.toString().c_str());
+}
+
 static void check()
 {
     set_state(GH_CHECKING);
@@ -62,9 +84,10 @@ static void check()
         return;
     }
     if (code != 200) {
-        char e[48];
+        char e[64];
         if (code < 0) {
-            snprintf(e, sizeof e, "%s", http.errorToString(code).c_str());  // TLS, DNS, timeout
+            http.end();
+            diagnose(e, sizeof e);
         } else {
             snprintf(e, sizeof e, "HTTP %d", code);
         }
