@@ -20,9 +20,20 @@ while standing, position jumps (implied speed > 2 x receiver speed + 15 km/h) sk
 ## Screens (swipe left/right)
 
 1. Speedometer (large seven-segment digits)
-2. Odometer: trip, total, max, average, moving time; long-press "Zeruj trip" resets the trip and starts a new GPX file
-3. GPS: position, altitude, satellites, HDOP, UTC, signal strength
-4. Wi-Fi: home network / hotspot, web page address, device password, updates
+2. Acceleration timer (POMIAR)
+3. Odometer: trip, total, max, average, moving time; long-press "Zeruj trip" resets the trip and starts a new GPX file
+4. GPS: position, altitude, satellites, HDOP, UTC, signal strength
+5. Wi-Fi: home network / hotspot, web page address, device password, updates
+
+## Acceleration timer ("POMIAR" screen)
+
+0-100, 0-200, 100-200 km/h, 100 m and 1/4 mile from the GPS Doppler speed. The GPS module is switched
+to 10 Hz at every start (`$PCAS02,100` for AT6558 clones, UBX CFG-RATE for u-blox; never saved in the
+module), and the measured rate is shown. Stand still for 1 s, then drive off: the clock starts where
+the speed left 0 (interpolated between samples) and the run ends when the speed drops by 5 km/h.
+Crossing times are interpolated between samples (about +-0.05 s at 10 Hz). Best times are kept in NVS
+(not from runs at < 5 Hz or interrupted ones); long-press the "POMIAR" title to clear them. Logic in
+`lib/accel_core` (host tests). Use it on a closed track only.
 
 ## Wi-Fi and web page
 

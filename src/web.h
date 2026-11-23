@@ -16,6 +16,10 @@ struct web_snapshot_t {
     char gpx_file[32];  // file being written ("" = none): cannot be deleted
     uint32_t gpx_points;
     char sd[64];
+    // acceleration timer: last run and best times (s, < 0 = none), see src/accel.h
+    float acc_last[5], acc_best[5];
+    float acc_v100m, acc_vquarter, acc_vmax;
+    bool acc_has_last, acc_running, acc_aborted, acc_low_rate;
 };
 
 void web_begin();                              // starts the server task (once)

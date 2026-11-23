@@ -39,10 +39,17 @@ struct gps_data_t {
     uint8_t snr_top4;    // mean of the 4 strongest (what a fix depends on)
     uint32_t fix_seq;    // +1 for every new position (GGA and RMC both count)
     uint32_t fix_ms;     // millis() when the latest position arrived
+    // One sample per navigation epoch (RMC), for the acceleration timer:
+    uint32_t spd_seq;    // +1 per RMC sentence
+    uint32_t spd_ms;     // millis() when it arrived
+    float spd_kmh;       // receiver (Doppler) speed in it
+    bool spd_valid;      // RMC status A
+    float rate_hz;       // measured epochs per second (10 after the 10 Hz command, 1 if ignored)
 };
 
 void gps_begin();
 void gps_poll();                    // call often from loop(): drains UART into the parser
 void gps_get(gps_data_t *out);
 uint32_t gps_fix_seq();
+uint32_t gps_spd_seq();             // +1 per GPS epoch (RMC): cheap check for a new speed sample
 void gps_toggle_echo();             // raw NMEA copied to the USB serial (diagnostics, u-center)             // cheap check for "new position since last time"

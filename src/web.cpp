@@ -183,6 +183,9 @@ a.btn{border-radius:6px;border:1px solid #3a434c;background:#2a3138;color:#e8ece
  <p style="margin:4px 0 0" class="k" id="sd"></p>
 </div>
 
+<h2>Pomiary przyspieszenia</h2>
+<div class="card"><table id="acc"></table>
+<small id="accnote">Na CYD: ekran POMIAR. Stań na 1 s, ruszaj — czas startuje sam. Tylko na zamkniętym torze.</small></div>
 <h2>Przejazdy</h2>
 <div class="card" id="rides"><div class="k">…</div></div>
 <div id="ride" hidden></div>
@@ -225,6 +228,12 @@ async function live(){
   $('sd').textContent=d.sd;
   $('wifi').innerHTML=d.wifi;
   $('gh').textContent=d.gh;$('ghinst').style.display=d.gh_available?'':'none';
+  if(d.acc){const a=d.acc,n=['0–100 km/h','0–200 km/h','100–200 km/h','100 m','1/4 mili'],f=v=>v>0?v.toFixed(2).replace('.',',')+' s':'—';
+   const sp=[0,0,0,a.v100m,a.vquarter];let h='<tr><td class="k"></td><td class="k">ostatni'+(a.running?' (trwa)':'')+'</td><td class="k">najlepszy</td></tr>';
+   n.forEach((x,i)=>{h+='<tr><td>'+x+'</td><td class="v" style="font-size:18px">'+(a.has_last?f(a.last[i]):'—')+
+    (a.has_last&&a.last[i]>0&&sp[i]?' <small>'+sp[i]+' km/h</small>':'')+'</td><td>'+f(a.best[i])+'</td></tr>';});
+   $('acc').innerHTML=h;
+   $('accnote').textContent=a.has_last&&a.aborted?'Ostatni przerwany: utrata GPS.':a.has_last&&a.low_rate?'Ostatni przy GPS 1 Hz: wynik przybliżony, nie liczy się do najlepszych.':'Na CYD: ekran POMIAR. Stań na 1 s, ruszaj — czas startuje sam. Tylko na zamkniętym torze.';}
  }catch(e){$('fix').innerHTML='<span class="err">brak połączenia</span>';}
 }
 $('wf').onsubmit=async e=>{e.preventDefault();const fd=new FormData(e.target);
@@ -330,6 +339,16 @@ static void handle_status()
     json_escape(out, ght);
     out += "\",\"gh_available\":";
     out += gh.state == GH_AVAILABLE ? "true" : "false";
+    char acc[300];
+    snprintf(acc, sizeof acc,
+             ",\"acc\":{\"last\":[%.2f,%.2f,%.2f,%.2f,%.2f],\"best\":[%.2f,%.2f,%.2f,%.2f,%.2f],"
+             "\"v100m\":%.0f,\"vquarter\":%.0f,\"vmax\":%.0f,\"has_last\":%s,\"running\":%s,\"aborted\":%s,"
+             "\"low_rate\":%s}",
+             d.acc_last[0], d.acc_last[1], d.acc_last[2], d.acc_last[3], d.acc_last[4], d.acc_best[0], d.acc_best[1],
+             d.acc_best[2], d.acc_best[3], d.acc_best[4], d.acc_v100m, d.acc_vquarter, d.acc_vmax,
+             d.acc_has_last ? "true" : "false", d.acc_running ? "true" : "false", d.acc_aborted ? "true" : "false",
+             d.acc_low_rate ? "true" : "false");
+    out += acc;
     out += '}';
     s_server.send(200, "application/json", out);
 }

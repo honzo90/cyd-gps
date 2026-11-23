@@ -54,6 +54,32 @@ static void sat_update(const char *sys, int prn, int elev, int snr, uint32_t now
 
 // line: "$xxGSV,total,num,inview,prn,elev,az,snr,...*CS" without CR/LF.
 // NMEA 4.1 may append a signal-ID field after the last group; it is ignored.
+// Speed samples: one per RMC sentence (= one per navigation epoch), for the acceleration timer and
+// the measured update rate.
+static uint32_t s_spd_seq, s_spd_ms;
+static float s_spd_kmh;
+static bool s_spd_valid;
+static uint32_t s_rate_n, s_rate_t0;
+static float s_rate_hz;
+
+static void on_rmc(const char *line)
+{
+    // "$GNRMC,hhmmss.ss,A,..." : field 2 is the status (A = valid fix)
+    const char *c1 = strchr(line, ',');
+    const char *c2 = c1 ? strchr(c1 + 1, ',') : NULL;
+    const uint32_t now = millis();
+    s_spd_valid = c2 && c2[1] == 'A' && s_gps.speed.isValid();
+    s_spd_kmh = s_spd_valid ? (float)s_gps.speed.kmph() : 0;  // TinyGPS has just parsed this RMC
+    s_spd_ms = now;
+    ++s_spd_seq;
+    ++s_rate_n;
+    if (now - s_rate_t0 >= 2000) {
+        s_rate_hz = s_rate_n * 1000.0f / (now - s_rate_t0);
+        s_rate_n = 0;
+        s_rate_t0 = now;
+    }
+}
+
 static void parse_line(const char *line)
 {
     if (line[0] != '$') {
@@ -67,7 +93,14 @@ static void parse_line(const char *line)
     for (const char *p = line + 1; p < star; ++p) {
         cs ^= (uint8_t)*p;
     }
-    if (cs != (uint8_t)strtoul(star + 1, NULL, 16) || strncmp(line + 3, "GSV,", 4) != 0) {
+    if (cs != (uint8_t)strtoul(star + 1, NULL, 16)) {
+        return;
+    }
+    if (strncmp(line + 3, "RMC,", 4) == 0) {
+        on_rmc(line);
+        return;
+    }
+    if (strncmp(line + 3, "GSV,", 4) != 0) {
         return;
     }
     const char sys[2] = {line[1], line[2]};
@@ -168,8 +201,8 @@ static void sig_log()
     last = now;
     uint8_t view, trk, strong, mx, top4;
     sat_stats(&view, &trk, &strong, &mx, &top4);
-    Serial.printf("SIG t=%lus fix=%d used=%lu hdop=%.1f view=%u trk=%u >=30:%u max=%u top4=%u |",
-                  (unsigned long)(now / 1000), fix,
+    Serial.printf("SIG t=%lus hz=%.1f fix=%d used=%lu hdop=%.1f view=%u trk=%u >=30:%u max=%u top4=%u |",
+                  (unsigned long)(now / 1000), now - s_spd_ms < 2500 ? s_rate_hz : 0.0f, fix,
                   (unsigned long)(s_gps.satellites.isValid() ? s_gps.satellites.value() : 0),
                   s_gps.hdop.isValid() ? s_gps.hdop.hdop() : 0.0, view, trk, strong, mx, top4);
     bool printed[k_max_sats] = {};
@@ -249,6 +282,28 @@ static void set_baud(int idx)
     Serial.printf("GPS: trying %lu baud\n", (unsigned long)k_bauds[idx]);
 }
 
+// 10 Hz navigation rate, sent after every lock and never saved in the module (no $PCAS00 / UBX save):
+// a power cycle restores its defaults. AT6558 clones (CASIC): $PCAS02,<ms>. A genuine u-blox: UBX
+// CFG-RATE. Each chip ignores the other's command. At 115200 baud 10 Hz NMEA uses ~75% of the line,
+// so the satellite list (GSV) is cut to once per second with $PCAS03 (GGA, GSA, RMC every epoch).
+static void nmea_send(const char *body)
+{
+    uint8_t cs = 0;
+    for (const char *p = body; *p; ++p) {
+        cs ^= (uint8_t)*p;
+    }
+    s_uart.printf("$%s*%02X\r\n", body, cs);
+}
+
+static void set_rate_10hz()
+{
+    nmea_send("PCAS02,100");
+    nmea_send("PCAS03,1,0,1,10,1,0,0,0");  // GGA GLL GSA GSV RMC VTG ZDA ANT: every Nth epoch, 0 = off
+    static const uint8_t ubx_rate[] = {0xB5, 0x62, 0x06, 0x08, 0x06, 0x00, 0x64, 0x00, 0x01, 0x00, 0x01, 0x00, 0x7A, 0x12};
+    s_uart.write(ubx_rate, sizeof ubx_rate);
+    Serial.println("GPS: asked for 10 Hz");
+}
+
 static void autobaud_step()
 {
     const uint32_t now = millis();
@@ -257,6 +312,9 @@ static void autobaud_step()
         if (!s_locked && s_gps.passedChecksum() - s_window_pass >= 2) {
             s_locked = true;
             Serial.printf("GPS: locked at %lu baud\n", (unsigned long)k_bauds[s_baud_idx]);
+            if (k_bauds[s_baud_idx] >= 57600) {  // 10 Hz does not fit into slower links
+                set_rate_10hz();
+            }
         }
         s_window_pass = s_gps.passedChecksum();
     }
@@ -300,6 +358,11 @@ void gps_poll()
     }
 }
 
+uint32_t gps_spd_seq()
+{
+    return s_spd_seq;
+}
+
 uint32_t gps_fix_seq()
 {
     return s_fix_seq;
@@ -309,6 +372,11 @@ void gps_get(gps_data_t *o)
 {
     o->fix_seq = s_fix_seq;
     o->fix_ms = s_fix_ms;
+    o->spd_seq = s_spd_seq;
+    o->spd_ms = s_spd_ms;
+    o->spd_kmh = s_spd_kmh;
+    o->spd_valid = s_spd_valid;
+    o->rate_hz = millis() - s_spd_ms < 2500 ? s_rate_hz : 0;
     o->fix = s_gps.location.isValid() && s_gps.location.age() < 3000;
     o->lat = s_gps.location.lat();
     o->lon = s_gps.location.lng();

@@ -3,7 +3,7 @@
 #define LV_CONF_H
 
 #define LV_COLOR_DEPTH 16
-#define LV_MEM_SIZE (36U * 1024U)  // ~45% used; the rest of the RAM is needed by Wi-Fi + TLS
+#define LV_MEM_SIZE (40U * 1024U)  // ~70% used incl. POMIAR; QR overlay needs ~5 KB more; rest of RAM: Wi-Fi + TLS
 #define LV_DEF_REFR_PERIOD 20
 #define LV_USE_LOG 0
 #define LV_FONT_MONTSERRAT_14 1

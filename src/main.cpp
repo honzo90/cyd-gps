@@ -10,6 +10,7 @@
 #include "cyd_arduino.h"
 #include "cyd_calib_ui.h"
 #include "gps.h"
+#include "accel.h"
 #include "gh_ota.h"
 #include "gpx_log.h"
 #include "net.h"
@@ -97,8 +98,8 @@ static void refresh_gps(const gps_data_t &g)
                               (unsigned long)g.chars, (unsigned long)g.bad_sum);
     } else {
         // Signal: received/in view, count >= 30 dB-Hz, mean of the 4 strongest, max.
-        lv_label_set_text_fmt(s_diag, "Sygnal: odb %u/%u  >=30dB: %u  top4 %u  max %u", g.sat_tracked,
-                              g.sat_view, g.sat_strong, g.snr_top4, g.snr_max);
+        lv_label_set_text_fmt(s_diag, "Sygnal: odb %u/%u  >=30dB: %u  top4 %u  %.0f Hz", g.sat_tracked,
+                              g.sat_view, g.sat_strong, g.snr_top4, g.rate_hz);
     }
 }
 
@@ -242,6 +243,19 @@ static void publish_web(const gps_data_t &g)
     }
     w.gpx_points = gpx_log_current(w.gpx_file, sizeof w.gpx_file);
     gpx_log_status(w.sd, sizeof w.sd);
+    accel_view_t a;
+    accel_get(&a);
+    for (int i = 0; i < ACC_N; ++i) {
+        w.acc_last[i] = a.has_last ? a.last.t[i] : -1;
+        w.acc_best[i] = a.best[i];
+    }
+    w.acc_v100m = a.last.v_100m;
+    w.acc_vquarter = a.last.v_quarter;
+    w.acc_vmax = a.last.v_max;
+    w.acc_has_last = a.has_last;
+    w.acc_running = a.phase == ACC_RUNNING;
+    w.acc_aborted = a.last.aborted;
+    w.acc_low_rate = a.last.low_rate;
     web_publish(&w);
 }
 
@@ -278,6 +292,105 @@ static void on_reset_trip(lv_event_t *)
     lv_obj_remove_flag(s_reset_note, LV_OBJ_FLAG_HIDDEN);
     lv_timer_create(hide_note, 2000, NULL);
     refresh(NULL);
+}
+
+// ---- POMIAR: acceleration timer ------------------------------------------------------------
+static const char *const k_acc_names[ACC_N] = {"0-100 km/h", "0-200 km/h", "100-200 km/h", "100 m", "1/4 mili"};
+static lv_obj_t *s_acc_status, *s_acc_clock, *s_acc_speed, *s_acc_val[ACC_N], *s_acc_best[ACC_N], *s_acc_note;
+
+static void fmt_time(char *buf, size_t n, float t)
+{
+    if (t < 0) {
+        snprintf(buf, n, "--");
+    } else {
+        snprintf(buf, n, "%.2f s", t);
+    }
+}
+
+static void refresh_accel(lv_timer_t *)
+{
+    accel_view_t a;
+    accel_get(&a);
+    gps_data_t g;
+    gps_get(&g);
+    const char *st;
+    uint32_t col;
+    if (!a.sample_ok) {
+        st = "BRAK FIX";
+        col = 0xFF5A5A;
+    } else if (a.rate_hz > 0 && a.rate_hz < 5) {
+        st = "GPS 1 Hz";
+        col = 0xFFC145;
+    } else if (a.phase == ACC_RUNNING) {
+        st = "POMIAR";
+        col = 0xFF7A1A;
+    } else if (a.phase == ACC_ARMED) {
+        st = "GOTOWY";
+        col = 0x4CD97B;
+    } else {
+        st = "ZATRZYMAJ SIE";
+        col = 0x9AA4AE;
+    }
+    lv_label_set_text(s_acc_status, st);
+    lv_obj_set_style_text_color(s_acc_status, lv_color_hex(col), 0);
+
+    char b[24];
+    fmt_time(b, sizeof b, a.phase == ACC_RUNNING || a.has_last ? a.elapsed_s : 0);
+    lv_label_set_text(s_acc_clock, b);
+    lv_obj_set_style_text_color(s_acc_clock, lv_color_hex(a.phase == ACC_RUNNING ? 0xFF7A1A : 0xFFFFFF), 0);
+    lv_label_set_text_fmt(s_acc_speed, "%d km/h  %.0f Hz", (int)(g.spd_kmh + 0.5f), a.rate_hz);
+
+    for (int i = 0; i < ACC_N; ++i) {
+        fmt_time(b, sizeof b, a.has_last ? a.last.t[i] : -1);
+        lv_label_set_text(s_acc_val[i], b);
+        if (a.best[i] > 0) {
+            lv_label_set_text_fmt(s_acc_best[i], "naj. %.2f", a.best[i]);
+        } else {
+            lv_label_set_text(s_acc_best[i], "");
+        }
+    }
+    if (a.phase == ACC_ARMED && !a.has_last) {
+        lv_label_set_text(s_acc_note, "Ruszaj - czas startuje sam");
+    } else if (a.has_last && a.phase != ACC_RUNNING && a.last.aborted) {
+        lv_label_set_text(s_acc_note, "Przerwany: utrata GPS");
+    } else if (a.has_last && a.phase != ACC_RUNNING && a.last.low_rate) {
+        lv_label_set_text(s_acc_note, "GPS 1 Hz: wynik przyblizony");
+    } else if (a.phase == ACC_DONE) {
+        lv_label_set_text_fmt(s_acc_note, "Vmax %.0f km/h, %.0f m. Zatrzymaj sie.", a.last.v_max, a.last.dist_m);
+    } else {
+        lv_label_set_text(s_acc_note, "Tylko na zamknietym torze.");
+    }
+}
+
+static void on_acc_reset(lv_event_t *)
+{
+    accel_reset_best();
+    refresh_accel(NULL);
+}
+
+static void build_accel_screen(lv_obj_t *t)
+{
+    lv_obj_t *title = make_label(t, &lv_font_montserrat_20, 0xFFFFFF, 12, 8, LV_SYMBOL_LEFT "  POMIAR  " LV_SYMBOL_RIGHT);
+    // long press on the title clears the best times (rare, so no extra button)
+    lv_obj_add_flag(title, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_event_cb(title, on_acc_reset, LV_EVENT_LONG_PRESSED, NULL);
+    s_acc_status = make_label(t, &lv_font_montserrat_20, 0xFFFFFF, 0, 0, "");
+    lv_obj_align(s_acc_status, LV_ALIGN_TOP_RIGHT, -12, 8);
+
+    s_acc_clock = make_label(t, &lv_font_montserrat_32, 0xFFFFFF, 12, 38, "0.00 s");
+    s_acc_speed = make_label(t, &lv_font_montserrat_14, k_caption, 0, 0, "");
+    lv_obj_align(s_acc_speed, LV_ALIGN_TOP_RIGHT, -12, 52);
+
+    for (int i = 0; i < ACC_N; ++i) {
+        const int y = 84 + i * 24;
+        make_label(t, &lv_font_montserrat_14, k_caption, 12, y + 4, k_acc_names[i]);
+        s_acc_val[i] = make_label(t, &lv_font_montserrat_20, 0xFFFFFF, 118, y, "--");
+        s_acc_best[i] = make_label(t, &lv_font_montserrat_14, k_dim, 224, y + 4, "");
+    }
+    s_acc_note = make_label(t, &lv_font_montserrat_14, 0x9AA4AE, 0, 0, "");
+    lv_obj_align(s_acc_note, LV_ALIGN_BOTTOM_MID, 0, -10);
+    // 100 ms: the clock runs smoothly while the rest of the UI refreshes every 500 ms
+    lv_timer_create(refresh_accel, 100, NULL);
 }
 
 static void build_speedo_screen(lv_obj_t *t)
@@ -550,6 +663,7 @@ void setup()
     pinMode(0, INPUT_PULLUP);  // BOOT
     gps_begin();
     odometer_begin();
+    accel_begin();
     gpx_log_begin();
     if (!cyd_begin()) {
         return;
@@ -571,9 +685,10 @@ void setup()
     lv_obj_set_style_bg_color(tv, lv_color_hex(k_bg), 0);
     lv_obj_set_scrollbar_mode(tv, LV_SCROLLBAR_MODE_OFF);
     build_speedo_screen(lv_tileview_add_tile(tv, 0, 0, LV_DIR_RIGHT));
-    build_odo_screen(lv_tileview_add_tile(tv, 1, 0, LV_DIR_HOR));
-    build_gps_screen(lv_tileview_add_tile(tv, 2, 0, LV_DIR_HOR));
-    build_wifi_screen(lv_tileview_add_tile(tv, 3, 0, LV_DIR_LEFT));
+    build_accel_screen(lv_tileview_add_tile(tv, 1, 0, LV_DIR_HOR));
+    build_odo_screen(lv_tileview_add_tile(tv, 2, 0, LV_DIR_HOR));
+    build_gps_screen(lv_tileview_add_tile(tv, 3, 0, LV_DIR_HOR));
+    build_wifi_screen(lv_tileview_add_tile(tv, 4, 0, LV_DIR_LEFT));
 
     net_begin();  // after the display: the Wi-Fi start-up current peak comes with the backlight already on
     refresh(NULL);
@@ -654,6 +769,13 @@ void loop()
         gps_get(&g);
         odometer_feed(&g);
         gpx_log_feed(&g);
+    }
+    static uint32_t last_epoch;
+    if (gps_spd_seq() != last_epoch) {  // one speed sample per GPS epoch (10 Hz)
+        last_epoch = gps_spd_seq();
+        gps_data_t g;
+        gps_get(&g);
+        accel_feed(&g);
     }
     gpx_log_poll();
     cyd_loop();
