@@ -666,11 +666,17 @@ static void build_wifi_screen(lv_obj_t *t)
 
     lv_obj_set_width(s_wifi_info, s_w - 24);
     lv_obj_set_style_text_line_space(s_wifi_info, s_port ? 2 : 6, 0);
+    if (s_port) {  // never under the two stacked buttons (they start at y 240)
+        lv_obj_set_height(s_wifi_info, 240 - 4 - 42);
+        lv_label_set_long_mode(s_wifi_info, LV_LABEL_LONG_CLIP);
+    }
+    // Buttons: landscape side by side; portrait full width, update above Wi-Fi on/off.
+    const int bw_upd = s_port ? s_w - 16 : 160, bw_wifi = s_port ? s_w - 16 : 140;
 
     // Install from GitHub: long press, so a stray touch while driving cannot start it.
     s_gh_btn = lv_button_create(t);
-    lv_obj_set_size(s_gh_btn, 150, 34);
-    lv_obj_align(s_gh_btn, LV_ALIGN_BOTTOM_LEFT, 8, s_port ? -46 : -6);  // portrait: above Wi-Fi on/off
+    lv_obj_set_size(s_gh_btn, bw_upd, 34);
+    lv_obj_align(s_gh_btn, LV_ALIGN_BOTTOM_LEFT, 8, s_port ? -46 : -6);
     lv_obj_set_style_bg_color(s_gh_btn, lv_color_hex(0x1F5A36), 0);
     s_gh_btn_label = lv_label_create(s_gh_btn);
     lv_obj_center(s_gh_btn_label);
@@ -679,7 +685,7 @@ static void build_wifi_screen(lv_obj_t *t)
 
     // Check for updates: a plain click (it only asks GitHub, installs nothing).
     s_chk_btn = lv_button_create(t);
-    lv_obj_set_size(s_chk_btn, 160, 34);
+    lv_obj_set_size(s_chk_btn, bw_upd, 34);
     lv_obj_align(s_chk_btn, LV_ALIGN_BOTTOM_LEFT, 8, s_port ? -46 : -6);
     lv_obj_set_style_bg_color(s_chk_btn, lv_color_hex(0x2A3138), 0);
     s_chk_btn_label = lv_label_create(s_chk_btn);
@@ -688,7 +694,7 @@ static void build_wifi_screen(lv_obj_t *t)
     lv_obj_add_flag(s_chk_btn, LV_OBJ_FLAG_HIDDEN);
 
     lv_obj_t *btn = lv_button_create(t);
-    lv_obj_set_size(btn, 140, 34);
+    lv_obj_set_size(btn, bw_wifi, 34);
     lv_obj_align(btn, LV_ALIGN_BOTTOM_RIGHT, -8, -6);
     lv_obj_set_style_bg_color(btn, lv_color_hex(0x2A3138), 0);
     s_wifi_btn_label = lv_label_create(btn);
