@@ -199,6 +199,12 @@ a.btn{border-radius:6px;border:1px solid #3a434c;background:#2a3138;color:#e8ece
  <small>Sieć tylko 2,4 GHz. Gdy domowa sieć działa, hotspot CYD wyłącza się sam.</small>
 </div>
 
+<h2>Ekran CYD</h2>
+<div class="card"><div class="k">Obrót</div>
+ <button class="rot" data-r="0">0°</button> <button class="rot" data-r="1">90°</button>
+ <button class="rot" data-r="2">180°</button> <button class="rot" data-r="3">270°</button>
+ <small style="display:block;margin-top:6px">Zapamiętany po restarcie. Na CYD: przycisk ⟳ na ekranie WI‑FI.</small></div>
+
 <h2>Aktualizacja firmware</h2>
 <div class="card">
  <div id="gh" class="v" style="font-size:16px"></div>
@@ -228,6 +234,7 @@ async function live(){
   $('sd').textContent=d.sd;
   $('wifi').innerHTML=d.wifi;
   $('gh').textContent=d.gh;$('ghinst').style.display=d.gh_available?'':'none';
+  document.querySelectorAll('.rot').forEach(b=>{b.style.outline=+b.dataset.r===d.rot?'2px solid #4cd97b':'';});
   if(d.acc){const a=d.acc,n=['0–100 km/h','0–200 km/h','100–200 km/h','100 m','1/4 mili'],f=v=>v>0?v.toFixed(2).replace('.',',')+' s':'—';
    const sp=[0,0,0,a.v100m,a.vquarter];let h='<tr><td class="k"></td><td class="k">ostatni'+(a.running?' (trwa)':'')+'</td><td class="k">najlepszy</td></tr>';
    n.forEach((x,i)=>{h+='<tr><td>'+x+'</td><td class="v" style="font-size:18px">'+(a.has_last?f(a.last[i]):'—')+
@@ -240,6 +247,7 @@ $('wf').onsubmit=async e=>{e.preventDefault();const fd=new FormData(e.target);
  await fetch('/api/wifi',{method:'POST',body:new URLSearchParams(fd)});e.target.reset();
  alert('Zapisano. CYD łączy się z siecią; nowy adres IP pokaże ekran WI-FI na CYD.');};
 $('forget').onclick=async()=>{if(confirm('Zapomnieć sieć domową?'))await fetch('/api/forget',{method:'POST'});};
+document.querySelectorAll('.rot').forEach(b=>{b.onclick=()=>fetch('/api/rotate',{method:'POST',body:new URLSearchParams({r:b.dataset.r})}).then(live);});
 $('ghcheck').onclick=()=>fetch('/api/gh/check',{method:'POST'});
 $('ghinst').onclick=async()=>{if(confirm('Zainstalować nową wersję z GitHub? CYD zrestartuje się po instalacji.'))await fetch('/api/gh/install',{method:'POST'});};
 $('up').onclick=()=>{const f=$('fw').files[0];if(!f){return;}
@@ -343,11 +351,11 @@ static void handle_status()
     snprintf(acc, sizeof acc,
              ",\"acc\":{\"last\":[%.2f,%.2f,%.2f,%.2f,%.2f],\"best\":[%.2f,%.2f,%.2f,%.2f,%.2f],"
              "\"v100m\":%.0f,\"vquarter\":%.0f,\"vmax\":%.0f,\"has_last\":%s,\"running\":%s,\"aborted\":%s,"
-             "\"low_rate\":%s}",
+             "\"low_rate\":%s},\"rot\":%u",
              d.acc_last[0], d.acc_last[1], d.acc_last[2], d.acc_last[3], d.acc_last[4], d.acc_best[0], d.acc_best[1],
              d.acc_best[2], d.acc_best[3], d.acc_best[4], d.acc_v100m, d.acc_vquarter, d.acc_vmax,
              d.acc_has_last ? "true" : "false", d.acc_running ? "true" : "false", d.acc_aborted ? "true" : "false",
-             d.acc_low_rate ? "true" : "false");
+             d.acc_low_rate ? "true" : "false", (unsigned)d.rot);
     out += acc;
     out += '}';
     s_server.send(200, "application/json", out);
@@ -527,6 +535,31 @@ static void handle_update_done()
     }
 }
 
+static volatile int s_rot_req = -1;
+
+int web_take_rotation()
+{
+    const int r = s_rot_req;
+    if (r >= 0) {
+        s_rot_req = -1;
+    }
+    return r;
+}
+
+static void handle_rotate()
+{
+    if (!auth()) {
+        return;
+    }
+    const String r = s_server.arg("r");
+    if (r.length() != 1 || r[0] < '0' || r[0] > '3') {
+        s_server.send(400, "text/plain", "r=0..3");
+        return;
+    }
+    s_rot_req = r[0] - '0';
+    s_server.send(200, "text/plain", "ok");
+}
+
 static void handle_gh_check()
 {
     if (!auth()) {
@@ -575,6 +608,7 @@ void web_begin()
     s_server.on("/api/forget", HTTP_POST, handle_forget);
     s_server.on("/update", HTTP_POST, handle_update_done, handle_update_upload);
     s_server.on("/api/gh/check", HTTP_POST, handle_gh_check);
+    s_server.on("/api/rotate", HTTP_POST, handle_rotate);
     s_server.on("/api/gh/install", HTTP_POST, handle_gh_install);
     s_server.onNotFound([] {
         if (s_server.uri().startsWith("/gpx/") && s_server.method() == HTTP_GET) {

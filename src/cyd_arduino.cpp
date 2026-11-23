@@ -9,6 +9,7 @@
 #include "esp_lcd_panel_vendor.h"
 #include "freertos/semphr.h"
 #include "xpt2046.h"
+#include "cyd_rot.h"
 
 // Pins: witnessmenow/ESP32-Cheap-Yellow-Display PINS.md + DisplayConfig/CYD2USB/User_Setup.h
 static const int PIN_LCD_SCLK = 14, PIN_LCD_MOSI = 13, PIN_LCD_MISO = 12, PIN_LCD_CS = 15, PIN_LCD_DC = 2;
@@ -21,6 +22,15 @@ static const int DRAW_LINES = 12;  // 2 x 7.7 KB: leaves contiguous heap for TLS
 static esp_lcd_panel_handle_t s_panel;
 static SemaphoreHandle_t s_flush_done;
 static cyd_cal_t s_cal;
+static lv_display_t *s_disp;
+static uint8_t s_rot;  // 0..3, see cyd_rot.h
+
+#ifndef CYD_LCD_MIRROR_X
+#define CYD_LCD_MIRROR_X 1
+#endif
+#ifndef CYD_LCD_MIRROR_Y
+#define CYD_LCD_MIRROR_Y 0
+#endif
 
 static bool IRAM_ATTR on_trans_done(esp_lcd_panel_io_handle_t, esp_lcd_panel_io_event_data_t *, void *)
 {
@@ -68,9 +78,11 @@ static void touch_cb(lv_indev_t *, lv_indev_data_t *data)
     uint16_t rx, ry;
     if (cyd_touch_raw(&rx, &ry)) {
         int16_t x, y;
-        cyd_cal_apply(&s_cal, rx, ry, CYD_H_RES, CYD_V_RES, &x, &y);
-        last.x = x;
-        last.y = y;
+        cyd_cal_apply(&s_cal, rx, ry, CYD_H_RES, CYD_V_RES, &x, &y);  // calibration is landscape
+        int16_t u, v;
+        cyd_rot_touch(s_rot, x, y, &u, &v);
+        last.x = u;
+        last.y = v;
         data->state = LV_INDEV_STATE_PRESSED;
     } else {
         data->state = LV_INDEV_STATE_RELEASED;
@@ -167,14 +179,9 @@ bool cyd_begin(uint32_t spi_hz)
         return false;
     }
     esp_lcd_panel_invert_color(s_panel, CYD_LCD_INVERT);
-    esp_lcd_panel_swap_xy(s_panel, true);  // landscape
-#ifndef CYD_LCD_MIRROR_X
-#define CYD_LCD_MIRROR_X 1
-#endif
-#ifndef CYD_LCD_MIRROR_Y
-#define CYD_LCD_MIRROR_Y 0
-#endif
-    esp_lcd_panel_mirror(s_panel, CYD_LCD_MIRROR_X, CYD_LCD_MIRROR_Y);
+    const cyd_rot_panel_t p = cyd_rot_panel(0, CYD_LCD_MIRROR_X, CYD_LCD_MIRROR_Y);  // landscape
+    esp_lcd_panel_swap_xy(s_panel, p.swap_xy);
+    esp_lcd_panel_mirror(s_panel, p.mirror_x, p.mirror_y);
     cyd_cal_default(&s_cal, CYD_H_RES, CYD_V_RES);
 
     const size_t bytes = CYD_H_RES * DRAW_LINES * 2;
@@ -187,6 +194,7 @@ bool cyd_begin(uint32_t spi_hz)
     lv_init();
     lv_tick_set_cb([]() -> uint32_t { return millis(); });
     lv_display_t *disp = lv_display_create(CYD_H_RES, CYD_V_RES);
+    s_disp = disp;
     lv_display_set_color_format(disp, LV_COLOR_FORMAT_RGB565);
     lv_display_set_buffers(disp, b1, b2, bytes, LV_DISPLAY_RENDER_MODE_PARTIAL);
     lv_display_set_flush_cb(disp, flush_cb);
@@ -197,6 +205,24 @@ bool cyd_begin(uint32_t spi_hz)
     lv_indev_set_display(indev, disp);
     return true;
 }
+
+void cyd_set_rotation(uint8_t rot)
+{
+    rot &= 3;
+    const cyd_rot_panel_t p = cyd_rot_panel(rot, CYD_LCD_MIRROR_X, CYD_LCD_MIRROR_Y);
+    // Called from the LVGL thread between refreshes: flush_wait_cb has already waited for the last
+    // SPI transfer, so nothing is in flight while the scan direction changes. The draw buffers hold
+    // 320 x DRAW_LINES px; in portrait (240 wide) LVGL simply fits more lines into them.
+    lv_display_t *d = s_disp;
+    esp_lcd_panel_swap_xy(s_panel, p.swap_xy);
+    esp_lcd_panel_mirror(s_panel, p.mirror_x, p.mirror_y);
+    int16_t w, h;
+    cyd_rot_size(rot, &w, &h);
+    s_rot = rot;
+    lv_display_set_resolution(d, w, h);
+}
+
+uint8_t cyd_rotation() { return s_rot; }
 
 void cyd_loop()
 {

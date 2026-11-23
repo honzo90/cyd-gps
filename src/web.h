@@ -20,6 +20,7 @@ struct web_snapshot_t {
     float acc_last[5], acc_best[5];
     float acc_v100m, acc_vquarter, acc_vmax;
     bool acc_has_last, acc_running, acc_aborted, acc_low_rate;
+    uint8_t rot;  // screen rotation 0..3 (x 90 degrees)
 };
 
 void web_begin();                              // starts the server task (once)
@@ -31,4 +32,7 @@ void web_publish(const web_snapshot_t *s);     // from the loop task, ~2x per se
 static const uint32_t WEB_LOGIN_CODE_MS = 120000;
 bool web_login_url(char *buf, size_t n);
 void web_login_cancel();
-void web_logout_all();  // forget every logged-in browser (the password keeps working)
+void web_logout_all();
+
+// Screen rotation chosen on the page (0..3), or -1. Taken (cleared) by the loop task.
+int web_take_rotation();  // forget every logged-in browser (the password keeps working)

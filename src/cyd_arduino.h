@@ -8,6 +8,11 @@
 
 bool cyd_begin(uint32_t spi_hz = 40000000);
 void cyd_loop();
+// 0 = landscape 320x240, 1 = portrait 240x320, 2 = landscape upside down, 3 = portrait upside down.
+// Changes the panel scan direction, the LVGL resolution and the touch mapping; the caller rebuilds
+// its layout. Touch calibration stays in landscape (rotation 0).
+void cyd_set_rotation(uint8_t rot);
+uint8_t cyd_rotation();
 void cyd_backlight(uint8_t percent);
 void cyd_led(bool r, bool g, bool b);
 bool cyd_touch_raw(uint16_t *rx, uint16_t *ry);

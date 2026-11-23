@@ -23,7 +23,7 @@ while standing, position jumps (implied speed > 2 x receiver speed + 15 km/h) sk
 2. Acceleration timer (POMIAR)
 3. Odometer: trip, total, max, average, moving time; long-press "Zeruj trip" resets the trip and starts a new GPX file
 4. GPS: position, altitude, satellites, HDOP, UTC, signal strength
-5. Wi-Fi: home network / hotspot, web page address, device password, updates
+5. Wi-Fi: home network / hotspot, web page address, device password, updates, screen rotation (⟳ turns by 90°; also on the web page, USB command `R`)
 
 ## Acceleration timer ("POMIAR" screen)
 
