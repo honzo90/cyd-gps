@@ -2,5 +2,5 @@
 // release workflow refuses a tag (v1.2.3) that does not match this value.
 #pragma once
 #ifndef FW_VERSION  // test builds may override it (env:cyd2usb_rollbacktest)
-#define FW_VERSION "1.0.12"
+#define FW_VERSION "1.0.13"
 #endif
