@@ -66,6 +66,8 @@ static void diagnose(char *e, size_t n)
 static void check()
 {
     set_state(GH_CHECKING);
+    Serial.printf("GH: checking, heap %u B free, largest block %u B\n", (unsigned)ESP.getFreeHeap(),
+                  (unsigned)ESP.getMaxAllocHeap());
     WiFiClientSecure tls;
     tls.setCACert(gh_roots_pem_start);
     HTTPClient http;

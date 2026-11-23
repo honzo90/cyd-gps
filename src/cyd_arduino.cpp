@@ -16,7 +16,7 @@ static const int PIN_LCD_BL = 21;
 static const int PIN_TP_CLK = 25, PIN_TP_MOSI = 32, PIN_TP_MISO = 39, PIN_TP_CS = 33;
 static const int PIN_LED_R = 4, PIN_LED_G = 16, PIN_LED_B = 17;
 static const int BL_CH = 0;           // LEDC channel (Arduino 2.0 API)
-static const int DRAW_LINES = 24;
+static const int DRAW_LINES = 12;  // 2 x 7.7 KB: leaves contiguous heap for TLS (2 x 16.7 KB buffers)
 
 static esp_lcd_panel_handle_t s_panel;
 static SemaphoreHandle_t s_flush_done;
