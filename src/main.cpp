@@ -12,6 +12,7 @@
 #include "cyd_calib_ui.h"
 #include "gps.h"
 #include "accel.h"
+#include "bootlog.h"
 #include "gh_ota.h"
 #include "gpx_log.h"
 #include "net.h"
@@ -845,6 +846,7 @@ static bool boot_pressed_after_start(lv_obj_t *scr)
 void setup()
 {
     Serial.begin(115200);
+    bootlog_begin();
     pinMode(0, INPUT_PULLUP);  // BOOT
     gps_begin();
     odometer_begin();
@@ -887,7 +889,8 @@ void setup()
 // Single-letter commands on the USB serial:
 //   n  toggle raw NMEA echo      T  zero the whole odometer (trip and total)
 // USB serial (115200): n = NMEA echo on/off, T = zero the whole odometer,
-// L = list GPX files, D <name> = delete a GPX file (D alone lists), R = rotate screen, ? = help.
+// L = list GPX files, D <name> = delete a GPX file (D alone lists), R = rotate screen,
+// B = restart log (reasons of the last starts), ? = help.
 static void serial_commands()
 {
     while (Serial.available()) {
@@ -900,6 +903,9 @@ static void serial_commands()
             break;
         case 'L':
             gpx_log_print_files();
+            break;
+        case 'B':
+            bootlog_print();
             break;
         case 'R':
             s_rot_req = (cyd_rotation() + 1) & 3;  // turn the screen by 90 degrees
@@ -916,7 +922,7 @@ static void serial_commands()
             break;
         }
         case '?':
-            Serial.println("CMD: n NMEA echo, T zero odometer, L list GPX, D <name> delete GPX, R rotate screen");
+            Serial.println("CMD: n NMEA echo, T zero odometer, L list GPX, D <name> delete GPX, R rotate screen, B restart log");
             break;
         }
     }

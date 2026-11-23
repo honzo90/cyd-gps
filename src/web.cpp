@@ -8,6 +8,7 @@
 #include <string.h>
 #include "gh_ota.h"
 #include "gpx_log.h"
+#include "bootlog.h"
 #include "net.h"
 
 static WebServer s_server(80);
@@ -214,6 +215,7 @@ a.btn{border-radius:6px;border:1px solid #3a434c;background:#2a3138;color:#e8ece
  <input type="file" id="fw" accept=".bin"> <button id="up">Wgraj</button>
  <div id="upst" class="k"></div>
  <small>Plik .pio/build/cyd2usb/firmware.bin. Jeśli nowa wersja nie uruchomi Wi‑Fi w 15 s, CYD wróci do poprzedniej.</small>
+ <small id="boots" style="display:block;margin-top:8px"></small>
 </div>
 
 <script src="/rides.js?v=)HTML" FW_VERSION R"HTML("></script>
@@ -233,7 +235,7 @@ async function live(){
    $('map').href='https://www.openstreetmap.org/?mlat='+d.lat+'&mlon='+d.lon+'#map=17/'+d.lat+'/'+d.lon;$('map').style.display='';}
   $('sd').textContent=d.sd;
   $('wifi').innerHTML=d.wifi;
-  $('gh').textContent=d.gh;$('ghinst').style.display=d.gh_available?'':'none';
+  $('boots').textContent=d.boots||'';$('gh').textContent=d.gh;$('ghinst').style.display=d.gh_available?'':'none';
   document.querySelectorAll('.rot').forEach(b=>{b.style.outline=+b.dataset.r===d.rot?'2px solid #4cd97b':'';});
   if(d.acc){const a=d.acc,n=['0–100 km/h','0–200 km/h','100–200 km/h','100 m','1/4 mili'],f=v=>v>0?v.toFixed(2).replace('.',',')+' s':'—';
    const sp=[0,0,0,a.v100m,a.vquarter];let h='<tr><td class="k"></td><td class="k">ostatni'+(a.running?' (trwa)':'')+'</td><td class="k">najlepszy</td></tr>';
@@ -357,7 +359,11 @@ static void handle_status()
              d.acc_has_last ? "true" : "false", d.acc_running ? "true" : "false", d.acc_aborted ? "true" : "false",
              d.acc_low_rate ? "true" : "false", (unsigned)d.rot);
     out += acc;
-    out += '}';
+    char boots[200];
+    bootlog_text(boots, sizeof boots);
+    out += ",\"boots\":\"";
+    json_escape(out, boots);
+    out += "\"}";
     s_server.send(200, "application/json", out);
 }
 
