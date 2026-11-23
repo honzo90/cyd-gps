@@ -255,8 +255,9 @@ static void sim_tick()
     snprintf(body, sizeof body, "GPGGA,%02u%02u%02u.00,%02d%08.5f,N,%03d%08.5f,E,1,%02u,0.9,112.4,M,34.5,M,,",
              hh, mm, ss, lat_d, lat_m, lon_d, lon_m, 7 + (unsigned)(n / 5 % 5));
     sim_sentence(body);
-    snprintf(body, sizeof body, "GPRMC,%02u%02u%02u.00,A,%02d%08.5f,N,%03d%08.5f,E,6.5,45.0,231126,,,A",
-             hh, mm, ss, lat_d, lat_m, lon_d, lon_m);
+    // turning 15 deg/s so the direction arrow on the speedometer goes round once in 24 s
+    snprintf(body, sizeof body, "GPRMC,%02u%02u%02u.00,A,%02d%08.5f,N,%03d%08.5f,E,6.5,%.1f,231126,,,A",
+             hh, mm, ss, lat_d, lat_m, lon_d, lon_m, (double)(n * 15 % 360));
     sim_sentence(body);
 }
 #endif
