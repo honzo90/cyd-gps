@@ -4,6 +4,8 @@ GPS speedometer, odometer and GPX track logger for the Cheap Yellow Display
 (ESP32-2432S028, 2-USB variant) with a NEO-8M-compatible GPS module.
 Arduino-ESP32 2.0.17 + LVGL 9.2, PlatformIO.
 
+Po polsku (jak wrócić do projektu, ekrany, komendy, dziennik restartów): [powrot_do_projektu.md](powrot_do_projektu.md).
+
 ## Hardware
 
 | GPS module | CYD connector CN1 |
@@ -77,4 +79,6 @@ sh test/host/run.sh              # host tests for the odometer and GPX logic
 ```
 
 USB serial commands (115200): `n` toggles the raw NMEA echo, `T` zeroes the whole odometer,
-`L` lists the GPX files, `D 20261123-114602.gpx` deletes one (not the file being written), `?` help.
+`L` lists the GPX files, `D 20261123-114602.gpx` deletes one (not the file being written), `R` rotates
+the screen by 90°, `B` prints the restart log (reset reason of the last 8 starts, also on the web
+page), `?` help.
