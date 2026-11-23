@@ -362,6 +362,12 @@ static void refresh_accel(lv_timer_t *)
     }
 }
 
+static void on_acc_restart(lv_event_t *)
+{
+    accel_restart();
+    refresh_accel(NULL);
+}
+
 static void on_acc_reset(lv_event_t *)
 {
     accel_reset_best();
@@ -378,8 +384,19 @@ static void build_accel_screen(lv_obj_t *t)
     lv_obj_align(s_acc_status, LV_ALIGN_TOP_RIGHT, -12, 8);
 
     s_acc_clock = make_label(t, &lv_font_montserrat_32, 0xFFFFFF, 12, 38, "0.00 s");
-    s_acc_speed = make_label(t, &lv_font_montserrat_14, k_caption, 0, 0, "");
-    lv_obj_align(s_acc_speed, LV_ALIGN_TOP_RIGHT, -12, 52);
+    s_acc_speed = make_label(t, &lv_font_montserrat_14, k_caption, 130, 52, "");
+
+    // Restart: drop the current run or the last result, then stand 1 s and go again
+    lv_obj_t *rb = lv_button_create(t);
+    lv_obj_set_size(rb, 84, 34);
+    lv_obj_align(rb, LV_ALIGN_TOP_RIGHT, -10, 40);
+    lv_obj_set_style_bg_color(rb, lv_color_hex(0x2A3138), 0);
+    lv_obj_set_style_bg_color(rb, lv_color_hex(0x8A2E2E), LV_STATE_PRESSED);
+    lv_obj_t *rl = lv_label_create(rb);
+    lv_label_set_text(rl, LV_SYMBOL_REFRESH " Restart");
+    lv_obj_set_style_text_font(rl, &lv_font_montserrat_14, 0);
+    lv_obj_center(rl);
+    lv_obj_add_event_cb(rb, on_acc_restart, LV_EVENT_CLICKED, NULL);
 
     for (int i = 0; i < ACC_N; ++i) {
         const int y = 84 + i * 24;

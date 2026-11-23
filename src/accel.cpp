@@ -98,6 +98,13 @@ void accel_get(accel_view_t *v)
     v->sample_ok = s_ok;
 }
 
+void accel_restart()
+{
+    acc_restart(&s_acc);
+    s_has_last = false;
+    Serial.println("ACC: restart");
+}
+
 void accel_reset_best()
 {
     for (float &b : s_best) {

@@ -168,6 +168,13 @@ bool acc_step(acc_state_t *s, uint32_t t, float v, bool valid, float rate_hz)
     return done;
 }
 
+void acc_restart(acc_state_t *s)
+{
+    // IDLE, no result, not standing: the 1 s standing time starts again (arming refills the
+    // previous sample, so nothing else needs to be kept)
+    acc_init(s);
+}
+
 float acc_elapsed(const acc_state_t *s, uint32_t now_ms)
 {
     if (s->phase == ACC_RUNNING) {

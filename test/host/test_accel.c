@@ -149,6 +149,34 @@ static void test_jump_start_clamped(void)
     CHECK(st.t0_ms >= 1900 && st.t0_ms <= 2100);
 }
 
+static void test_restart(void)
+{
+    acc_state_t st;
+    // during a run: dropped, no result, back to waiting
+    acc_init(&st);
+    for (uint32_t t = 0; t <= 1500; t += 100) acc_step(&st, t, 0, true, 10);
+    acc_step(&st, 1600, 5, true, 10);
+    acc_step(&st, 1700, 10, true, 10);
+    CHECK(st.phase == ACC_RUNNING);
+    acc_restart(&st);
+    CHECK(st.phase == ACC_IDLE && st.res.t[ACC_T_0_100] < 0 && acc_elapsed(&st, 5000) == 0);
+    CHECK(!acc_step(&st, 1800, 15, true, 10));  // still moving: no run, no "finished"
+    CHECK(st.phase == ACC_IDLE);
+    // after a finished run: the result is cleared; standing 1 s arms again, not sooner
+    drive(6.0, 3000, 110, 100, 0, 10, &st);
+    CHECK(st.phase == ACC_DONE && st.res.t[ACC_T_0_100] > 0);
+    uint32_t t = 30000;
+    for (; t < 30500; t += 100) acc_step(&st, t, 0, true, 10);  // already standing 0.5 s
+    acc_restart(&st);
+    CHECK(st.phase == ACC_IDLE && st.res.t[ACC_T_0_100] < 0);
+    for (; t < 31000; t += 100) acc_step(&st, t, 0, true, 10);
+    CHECK(st.phase == ACC_IDLE);  // 0.5 s after the restart: not yet
+    for (; t <= 31600; t += 100) acc_step(&st, t, 0, true, 10);
+    CHECK(st.phase == ACC_ARMED);
+    acc_step(&st, t, 5, true, 10);
+    CHECK(st.phase == ACC_RUNNING);  // a new run starts normally
+}
+
 static void test_elapsed(void)
 {
     acc_state_t st;
@@ -168,6 +196,7 @@ int main(void)
     test_gps_lost_aborts();
     test_next_run_after_stopping();
     test_jump_start_clamped();
+    test_restart();
     test_elapsed();
     printf("%d/%d checks passed\n", s_run - s_fail, s_run);
     return s_fail != 0;

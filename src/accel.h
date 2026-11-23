@@ -19,3 +19,4 @@ void accel_begin();
 void accel_feed(const gps_data_t *g);  // from loop() for every new GPS epoch (spd_seq)
 void accel_get(accel_view_t *v);
 void accel_reset_best();
+void accel_restart();  // drop the current run / last result, wait for a new start

@@ -59,6 +59,9 @@ void acc_init(acc_state_t *s);
 // sample rate (Hz). Returns true when a run has just finished (s->res holds it).
 bool acc_step(acc_state_t *s, uint32_t t_ms, float kmh, bool valid, float rate_hz);
 
+// Restart: drop the current run or the last result and wait for a new start (stand 1 s again).
+void acc_restart(acc_state_t *s);
+
 // Seconds since the start while RUNNING (for the live clock), else the last run's duration.
 float acc_elapsed(const acc_state_t *s, uint32_t now_ms);
 
