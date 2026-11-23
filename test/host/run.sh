@@ -8,3 +8,4 @@ $CC lib/odo_core/src/odo_core.c test/host/test_odo.c -lm -o .pio/host_test/test_
 $CC lib/odo_core/src/odo_core.c lib/gpx_core/src/gpx_core.c test/host/test_gpx.c -lm -o .pio/host_test/test_gpx
 .pio/host_test/test_odo
 .pio/host_test/test_gpx
+node test/host/test_rides.mjs

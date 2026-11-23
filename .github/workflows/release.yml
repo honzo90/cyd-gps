@@ -38,6 +38,10 @@ jobs:
             ~/.cache/pip
           key: pio-${{ hashFiles('platformio.ini') }}
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
       - name: Host tests
         run: sh test/host/run.sh
 

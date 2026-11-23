@@ -29,6 +29,7 @@ typedef struct {
     uint8_t month, day, hh, mm, ss;  // UTC
     uint8_t sats;
     float hdop;
+    float speed_kmh;  // receiver (Doppler) speed; written as gpxtpx:speed in m/s
 } gpx_pt_t;
 
 typedef struct {

@@ -123,11 +123,11 @@ void gpx_log_feed(const gps_data_t *g)
         return;
     }
     const gpx_pt_t p = {g->lat, g->lon, (float)g->alt_m, g->alt_m != 0, g->year, g->month, g->day,
-                        g->hh,  g->mm,  g->ss,           (uint8_t)g->sats, (float)g->hdop};
+                        g->hh,  g->mm,  g->ss,           (uint8_t)g->sats, (float)g->hdop, (float)g->speed_kmh};
     if (!s_file && !open_file(&p)) {
         return;
     }
-    char line[192];
+    char line[320];
     int n = 0;
     if (d == GPX_LOG_NEW_SEG && s_points > 0) {
         n = snprintf(line, sizeof line, "%s", GPX_NEW_SEG);

@@ -48,7 +48,8 @@ int gpx_header(char *buf, size_t n, const char *track_name)
 {
     return snprintf(buf, n,
                     "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                    "<gpx version=\"1.1\" creator=\"CYD GPS\" xmlns=\"http://www.topografix.com/GPX/1/1\">\n"
+                    "<gpx version=\"1.1\" creator=\"CYD GPS\" xmlns=\"http://www.topografix.com/GPX/1/1\"\n"
+                    "     xmlns:gpxtpx=\"http://www.garmin.com/xmlschemas/TrackPointExtension/v2\">\n"
                     " <trk>\n"
                     "  <name>%s</name>\n"
                     "  <trkseg>\n",
@@ -57,13 +58,16 @@ int gpx_header(char *buf, size_t n, const char *track_name)
 
 int gpx_point(char *buf, size_t n, const gpx_pt_t *p)
 {
-    // GPX 1.1 order inside <trkpt>: ele, time, ..., sat, hdop
+    // GPX 1.1 order inside <trkpt>: ele, time, ..., sat, hdop, extensions (Garmin's speed, m/s,
+    // understood by Strava, Garmin Connect, gpx.studio and the CYD web page)
     char ele[32] = "";
     if (p->has_ele) {
         snprintf(ele, sizeof ele, "<ele>%.1f</ele>", p->ele_m);
     }
     return snprintf(buf, n,
                     "   <trkpt lat=\"%.7f\" lon=\"%.7f\">%s<time>%04u-%02u-%02uT%02u:%02u:%02uZ</time>"
-                    "<sat>%u</sat><hdop>%.1f</hdop></trkpt>\n",
-                    p->lat, p->lon, ele, p->year, p->month, p->day, p->hh, p->mm, p->ss, p->sats, p->hdop);
+                    "<sat>%u</sat><hdop>%.1f</hdop><extensions><gpxtpx:TrackPointExtension><gpxtpx:speed>%.2f"
+                    "</gpxtpx:speed></gpxtpx:TrackPointExtension></extensions></trkpt>\n",
+                    p->lat, p->lon, ele, p->year, p->month, p->day, p->hh, p->mm, p->ss, p->sats, p->hdop,
+                    p->speed_kmh > 0 ? p->speed_kmh / 3.6 : 0.0);
 }

@@ -11,6 +11,8 @@
 #include "net.h"
 
 static WebServer s_server(80);
+// "Przejazdy" view (ride list, map, speed chart): src/web/rides.js, embedded by platformio.ini.
+extern const char k_rides_js[] asm("_binary_src_web_rides_js_start");
 static portMUX_TYPE s_snap_mux = portMUX_INITIALIZER_UNLOCKED;
 static web_snapshot_t s_snap;
 static bool s_update_ok;
@@ -154,7 +156,17 @@ h1{font-size:20px;margin:0 0 12px}h2{font-size:16px;color:#9aa4ae;margin:20px 0 
 .big{font-size:56px;font-weight:700;line-height:1}
 table{width:100%;border-collapse:collapse}td{padding:6px 4px;border-bottom:1px solid #2a3138}
 a{color:#6cb6ff}button,input{font:inherit;border-radius:6px;border:1px solid #3a434c;background:#2a3138;color:#e8ecef;padding:6px 10px}
-button.del{background:#5a2424;border-color:#7a3030}input{width:100%;box-sizing:border-box;margin:4px 0}
+button.del{background:#5a2424;border-color:#7a3030}
+.ride{display:block;padding:10px 2px;border-bottom:1px solid #2a3138;color:inherit;text-decoration:none}
+.ride:last-child{border-bottom:0}.rtop{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.rwhen{font-weight:600}.badge{background:#1f5a36;color:#4cd97b;border-radius:10px;padding:1px 8px;font-size:12px}
+#ride{position:fixed;inset:0;background:#101418;overflow:auto;padding:12px 16px;z-index:1000}
+#ride[hidden]{display:none}body.noscroll{overflow:hidden}
+.rhead{display:flex;gap:12px;align-items:center;margin-bottom:10px}
+.map{height:46vh;min-height:240px;border-radius:10px;margin-bottom:6px}
+svg.trk,svg.chart{display:block;width:100%;height:auto;background:#1a2026;border-radius:10px;margin:6px 0}
+.stats{margin:12px 0}.ract{display:flex;gap:10px;align-items:center;margin:16px 0 28px}
+a.btn{border-radius:6px;border:1px solid #3a434c;background:#2a3138;color:#e8ecef;padding:6px 10px;text-decoration:none}input{width:100%;box-sizing:border-box;margin:4px 0}
 .ok{color:#4cd97b}.warn{color:#ffc145}.err{color:#ff5a5a}small{color:#7f8a94}
 </style></head><body>
 <h1>CYD GPS <small id="ver"></small></h1>
@@ -171,8 +183,9 @@ button.del{background:#5a2424;border-color:#7a3030}input{width:100%;box-sizing:b
  <p style="margin:4px 0 0" class="k" id="sd"></p>
 </div>
 
-<h2>Trasy GPX</h2>
-<div class="card"><table id="files"><tr><td>…</td></tr></table></div>
+<h2>Przejazdy</h2>
+<div class="card" id="rides"><div class="k">…</div></div>
+<div id="ride" hidden></div>
 
 <h2>Wi‑Fi domowe</h2>
 <div class="card">
@@ -194,6 +207,7 @@ button.del{background:#5a2424;border-color:#7a3030}input{width:100%;box-sizing:b
  <small>Plik .pio/build/cyd2usb/firmware.bin. Jeśli nowa wersja nie uruchomi Wi‑Fi w 15 s, CYD wróci do poprzedniej.</small>
 </div>
 
+<script src="/rides.js"></script>
 <script>
 const $=id=>document.getElementById(id);
 const fmtKm=v=>v.toFixed(2)+' km';
@@ -213,19 +227,6 @@ async function live(){
   $('gh').textContent=d.gh;$('ghinst').style.display=d.gh_available?'':'none';
  }catch(e){$('fix').innerHTML='<span class="err">brak połączenia</span>';}
 }
-async function files(){
- const r=await fetch('/api/files');const d=await r.json();const t=$('files');t.innerHTML='';
- if(!d.files.length){t.innerHTML='<tr><td class="k">'+(d.sd?'Brak tras':'Brak karty SD')+'</td></tr>';return;}
- d.files.sort((a,b)=>b.name.localeCompare(a.name));
- for(const f of d.files){
-  const tr=document.createElement('tr');const kb=(f.size/1024).toFixed(1)+' KB';
-  tr.innerHTML='<td><a href="/gpx/'+f.name+'" download>'+f.name+'</a></td><td class="k">'+kb+'</td><td style="text-align:right">'+
-   (f.active?'<small>zapisywany</small>':'<button class="del">Usuń</button>')+'</td>';
-  const b=tr.querySelector('button');
-  if(b)b.onclick=async()=>{if(confirm('Usunąć '+f.name+'?')){await fetch('/api/delete?name='+encodeURIComponent(f.name),{method:'POST'});files();}};
-  t.appendChild(tr);
- }
-}
 $('wf').onsubmit=async e=>{e.preventDefault();const fd=new FormData(e.target);
  await fetch('/api/wifi',{method:'POST',body:new URLSearchParams(fd)});e.target.reset();
  alert('Zapisano. CYD łączy się z siecią; nowy adres IP pokaże ekran WI-FI na CYD.');};
@@ -237,7 +238,8 @@ $('up').onclick=()=>{const f=$('fw').files[0];if(!f){return;}
  x.upload.onprogress=e=>{$('upst').textContent='Wysyłanie '+Math.round(e.loaded*100/e.total)+'%';};
  x.onload=()=>{$('upst').textContent=x.responseText;};x.onerror=()=>{$('upst').textContent='Błąd połączenia';};
  x.open('POST','/update');x.send(fd);};
-live();files();setInterval(live,1000);setInterval(files,15000);
+live();setInterval(live,1000);
+if(window.CydRides)CydRides.init();else $('rides').textContent='Nie udało się wczytać widoku przejazdów.';
 </script></body></html>)HTML";
 
 static bool auth()
@@ -267,6 +269,15 @@ static void handle_root()
         return;
     }
     s_server.send_P(200, "text/html; charset=utf-8", k_page);
+}
+
+static void handle_rides_js()
+{
+    if (!auth()) {
+        return;
+    }
+    s_server.sendHeader("Cache-Control", "private, max-age=3600");
+    s_server.send_P(200, "application/javascript; charset=utf-8", k_rides_js);
 }
 
 static void handle_status()
@@ -537,6 +548,7 @@ void web_begin()
     s_server.collectHeaders(k_headers, 1);
     s_server.on("/login", HTTP_GET, handle_login);
     s_server.on("/", HTTP_GET, handle_root);
+    s_server.on("/rides.js", HTTP_GET, handle_rides_js);
     s_server.on("/api/status", HTTP_GET, handle_status);
     s_server.on("/api/files", HTTP_GET, handle_files);
     s_server.on("/api/delete", HTTP_POST, handle_delete);

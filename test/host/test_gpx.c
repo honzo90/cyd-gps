@@ -102,13 +102,20 @@ static void test_bad_fixes_skipped_and_make_a_gap(void)
 
 static void test_point_format(void)
 {
-    gpx_pt_t p = {52.2297, 21.0122, 112.4f, true, 2026, 11, 23, 11, 46, 2, 9, 1.25f};
-    char buf[256];
-    gpx_point(buf, sizeof buf, &p);
+    gpx_pt_t p = {52.2297, 21.0122, 112.4f, true, 2026, 11, 23, 11, 46, 2, 9, 1.5f, 5.0f};
+    char buf[320];
+    const int n = gpx_point(buf, sizeof buf, &p);
+    CHECK(n > 0 && n < 300);  // fits the 320 B line buffer in gpx_log.cpp with room for GPX_NEW_SEG
     CHECK(strcmp(buf, "   <trkpt lat=\"52.2297000\" lon=\"21.0122000\"><ele>112.4</ele>"
-                      "<time>2026-11-23T11:46:02Z</time><sat>9</sat><hdop>1.2</hdop></trkpt>\n") == 0 ||
-          strcmp(buf, "   <trkpt lat=\"52.2297000\" lon=\"21.0122000\"><ele>112.4</ele>"
-                      "<time>2026-11-23T11:46:02Z</time><sat>9</sat><hdop>1.3</hdop></trkpt>\n") == 0);
+                      "<time>2026-11-23T11:46:02Z</time><sat>9</sat><hdop>1.5</hdop>"
+                      "<extensions><gpxtpx:TrackPointExtension><gpxtpx:speed>1.39</gpxtpx:speed>"
+                      "</gpxtpx:TrackPointExtension></extensions></trkpt>\n") == 0);
+    p.speed_kmh = 300.0f;
+    gpx_point(buf, sizeof buf, &p);
+    CHECK(strstr(buf, "<gpxtpx:speed>83.33</gpxtpx:speed>") != NULL);
+    p.speed_kmh = -1.0f;  // never a negative speed
+    gpx_point(buf, sizeof buf, &p);
+    CHECK(strstr(buf, "<gpxtpx:speed>0.00</gpxtpx:speed>") != NULL);
     p.has_ele = false;
     p.lat = -33.5;
     p.lon = -70.25;
@@ -119,7 +126,7 @@ static void test_point_format(void)
 
 static void test_filename_and_document(void)
 {
-    gpx_pt_t p = {0, 0, 0, false, 2026, 1, 5, 7, 8, 9, 0, 0};
+    gpx_pt_t p = {0, 0, 0, false, 2026, 1, 5, 7, 8, 9, 0, 0, 0};
     char name[40];
     gpx_filename(name, sizeof name, &p);
     CHECK(strcmp(name, "/gpx/20260105-070809.gpx") == 0);
@@ -136,6 +143,7 @@ static void test_filename_and_document(void)
     for (const char *q = doc; (q = strstr(q, "</trkseg>")); ++q) close_seg++;
     CHECK(open_seg == 2 && close_seg == 2);
     CHECK(strstr(doc, "<gpx version=\"1.1\"") != NULL);
+    CHECK(strstr(doc, "xmlns:gpxtpx=\"http://www.garmin.com/xmlschemas/TrackPointExtension/v2\"") != NULL);
     CHECK(strstr(doc, "</trk>\n</gpx>\n") != NULL);
 }
 

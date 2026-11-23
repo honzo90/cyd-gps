@@ -31,6 +31,12 @@ and shown on the Wi-Fi screen. Open `http://192.168.4.1` (user `cyd`, same passw
 data, GPX download/delete, home Wi-Fi settings and firmware upload. No credentials are stored
 in this repository.
 
+Rides ("Przejazdy" on the web page): every GPX file as date/time, distance, moving time, average and
+max speed and climb; tap one for the track on an OpenStreetMap map (loaded by the phone; without
+internet, e.g. on the CYD hotspot, the track alone with a scale bar) and a speed chart. The phone does
+the maths (`src/web/rides.js`, tested by `test/host/test_rides.mjs`). Track points carry the GPS
+(Doppler) speed as Garmin's `gpxtpx:speed`, which Strava and Garmin Connect read as well.
+
 QR login: long-press "QR" on the Wi-Fi screen. It shows a one-time link (valid 2 minutes, one use)
 and the device password; scanning it opens the page logged in for 30 days (cookie, up to 4
 browsers, kept across reboots). "Wyloguj tel." (long press) logs all browsers out. The password
