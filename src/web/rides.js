@@ -147,6 +147,8 @@
   const mem = new Map();  // name:size -> {stats, segs}
   let files = [];
   let leaflet = null;     // Promise<boolean>
+  let shown = null;       // name of the ride on screen (route() runs on hashchange and popstate)
+  let fromList = false;   // the ride was opened from the list on this page: "back" may use the history
 
   const nf = d => new Intl.NumberFormat('pl-PL', { maximumFractionDigits: d, minimumFractionDigits: d });
   const km = m => m < 1000 ? Math.round(m) + ' m' : nf(m < 10000 ? 2 : 1).format(m / 1000) + ' km';
@@ -220,6 +222,7 @@
     for (const f of files) {
       const row = el('a', 'ride');
       row.href = '#r=' + f.name;
+      row.onclick = () => { fromList = true; };
       const top = el('div', 'rtop');
       top.appendChild(el('span', 'rwhen', when(f.name)));
       if (f.active) top.appendChild(el('span', 'badge', 'w trakcie'));
@@ -351,7 +354,7 @@
     doc.body.classList.add('noscroll');
     const head = el('div', 'rhead');
     const back = el('button', '', '‹ Przejazdy');
-    back.onclick = () => { if (history.length > 1) history.back(); else location.hash = ''; };
+    back.onclick = closeRide;
     head.append(back, el('span', 'rwhen', when(name)));
     view.appendChild(head);
     const f = files.find(x => x.name === name) || { name, size: 0 };
@@ -402,19 +405,41 @@
     view.appendChild(act);
   }
 
+  function hideRide() {
+    shown = null;
+    $('ride').hidden = true;
+    $('ride').textContent = '';
+    doc.body.classList.remove('noscroll');
+  }
+
+  // "‹ Przejazdy". Opened from the list on this page: step back in the history (the phone's own back
+  // gesture then stays consistent). Otherwise (page reloaded or restored on a ride) the previous
+  // history entry is another page, so never history.back(): just drop the #r and close.
+  function closeRide() {
+    const opened = location.hash;
+    const close = () => {
+      if (location.hash === opened) history.replaceState(null, '', location.pathname + location.search);
+      hideRide();
+    };
+    if (!fromList) return close();
+    fromList = false;
+    history.back();
+    setTimeout(close, 300);  // browsers that fire no event or have no entry to go back to
+  }
+
   function route() {
     const m = /^#r=(\d{8}-\d{6}\.gpx)$/.exec(location.hash);
-    if (m) {
+    if (!m) {
+      hideRide();
+    } else if (m[1] !== shown) {
+      shown = m[1];
       showRide(m[1]);
-    } else {
-      $('ride').hidden = true;
-      $('ride').textContent = '';
-      doc.body.classList.remove('noscroll');
     }
   }
 
   function init() {
     root.addEventListener('hashchange', route);
+    root.addEventListener('popstate', route);
     refreshList().then(route);
     setInterval(() => { if ($('ride').hidden) refreshList(); }, 15000);
   }
