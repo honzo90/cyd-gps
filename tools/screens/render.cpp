@@ -222,6 +222,16 @@ int main(int argc, char **argv)
     lv_obj_t *scr = lv_screen_active();
     lv_obj_set_style_bg_color(scr, lv_color_hex(k_bg), 0);
     lv_obj_remove_flag(scr, LV_OBJ_FLAG_SCROLLABLE);
+    for (uint8_t rot = 0; rot < 2; ++rot) {  // start screen, bar at 60 %
+        cyd_set_rotation(rot);
+        lv_obj_t *bar;
+        lv_obj_t *sp = splash_create(scr, &bar);
+        lv_bar_set_value(bar, 60, LV_ANIM_OFF);
+        settle();
+        save_png(dir, rot ? "pion-0-start" : "poziom-0-start");
+        lv_obj_delete(sp);
+    }
+    cyd_set_rotation(0);
     build_ui();
     refresh(NULL);
     lv_timer_create(refresh, 500, NULL);

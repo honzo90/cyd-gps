@@ -1177,19 +1177,52 @@ static void calib_done(const cyd_cal_t *cal, bool ok)
     s_rot_req = load_rotation();  // calibration always runs in landscape; now turn the UI back
 }
 
-// Show a hint and give the user 2 s to press BOOT (GPIO0) to force touch calibration.
+// Start screen: icon, name, version, a bar filling over the 2 s in which BOOT (GPIO0) forces the
+// touch calibration. Deleted afterwards (no RAM kept). *bar receives the progress bar (0..100).
+static lv_obj_t *splash_create(lv_obj_t *scr, lv_obj_t **bar)
+{
+    styles_init();
+    lv_obj_t *p = lv_obj_create(scr);
+    lv_obj_remove_style_all(p);
+    lv_obj_set_size(p, LV_PCT(100), LV_PCT(100));
+    lv_obj_set_style_bg_color(p, lv_color_hex(k_bg), 0);
+    lv_obj_set_style_bg_opa(p, LV_OPA_COVER, 0);
+    lv_obj_t *icon = make_label(p, &lv_font_montserrat_48, k_accent, 0, 0, LV_SYMBOL_GPS);
+    lv_obj_align(icon, LV_ALIGN_CENTER, 0, -52);
+    lv_obj_t *name = make_label(p, &lv_font_montserrat_32, k_text, 0, 0, "CYD GPS");
+    lv_obj_align(name, LV_ALIGN_CENTER, 0, 6);
+    lv_obj_t *ver = make_label(p, &lv_font_montserrat_14, k_caption, 0, 0, "wersja " FW_VERSION);
+    lv_obj_align(ver, LV_ALIGN_CENTER, 0, 36);
+    *bar = lv_bar_create(p);
+    lv_obj_set_size(*bar, 140, 6);
+    lv_obj_align(*bar, LV_ALIGN_CENTER, 0, 64);
+    lv_obj_set_style_bg_color(*bar, lv_color_hex(k_raised), 0);
+    lv_obj_set_style_bg_color(*bar, lv_color_hex(k_accent), LV_PART_INDICATOR);
+    lv_obj_t *hint = make_label(p, &lv_font_montserrat_14, k_dim, 0, 0, "BOOT = kalibracja dotyku");
+    lv_obj_align(hint, LV_ALIGN_BOTTOM_MID, 0, -10);
+    return p;
+}
+
+// Shows the start screen and gives the user 2 s to press BOOT to force touch calibration.
 static bool boot_pressed_after_start(lv_obj_t *scr)
 {
-    lv_obj_t *hint = make_label(scr, &lv_font_montserrat_14, 0xFFC145, 0, 0, "BOOT = kalibracja dotyku");
-    lv_obj_align(hint, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_t *bar;
+    lv_obj_t *splash = splash_create(scr, &bar);
     lv_refr_now(NULL);
     cyd_backlight(100);
     bool pressed = false;
+    int shown = -1;
     for (uint32_t t0 = millis(); millis() - t0 < 2000 && !pressed;) {
         pressed = digitalRead(0) == LOW;
+        const int v = (int)((millis() - t0) / 20);  // 0..100
+        if (v / 5 != shown / 5) {  // redraw the bar in 5 % steps (only the bar area is sent)
+            shown = v;
+            lv_bar_set_value(bar, v > 100 ? 100 : v, LV_ANIM_OFF);
+            lv_refr_now(NULL);
+        }
         delay(20);
     }
-    lv_obj_delete(hint);
+    lv_obj_delete(splash);
     return pressed;
 }
 
@@ -1211,12 +1244,15 @@ void setup()
 
     cyd_cal_t cal;
     bool have = cyd_cal_load(&cal);
-    if (have && boot_pressed_after_start(scr)) {
-        have = false;
+    if (have) {
+        cyd_set_rotation(load_rotation());  // the start screen already in the user's orientation
+        if (boot_pressed_after_start(scr)) {
+            have = false;
+            cyd_set_rotation(0);  // calibration runs in landscape
+        }
     }
     if (have) {
         cyd_touch_set_cal(&cal);
-        cyd_set_rotation(load_rotation());  // without a calibration: landscape until it is done
     }
     build_ui();
 
