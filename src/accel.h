@@ -11,6 +11,7 @@ struct accel_view_t {
     bool has_last;
     float best[ACC_N];   // < 0 = none yet
     float best_v100m, best_vquarter;  // speed at the end of the best 100 m / 1/4 mile
+    float best_grade[ACC_N];          // road grade (%) of the run that set each best; NAN = unknown
     float rate_hz;
     bool sample_ok;      // fix good enough to time
 };

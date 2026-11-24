@@ -5,6 +5,10 @@
 // interpolated between the samples around the start); the run ends when the speed drops (lift off,
 // braking), when every target was reached, or when samples stop coming. Crossing times are
 // interpolated between samples, distance is integrated from speed (trapezoid).
+//
+// Road grade: GPS altitude is noisy (a few metres per reading), so the grade is the slope of a
+// straight line fitted to altitude vs distance over every sample of the run, anchored by the
+// altitude averaged while standing at the start. Reported from ACC_GRADE_MIN_M of run only.
 #pragma once
 #include <stdbool.h>
 #include <stdint.h>
@@ -21,10 +25,12 @@ extern "C" {
 #define ACC_MAX_RUN_MS 60000
 #define ACC_DIST_SHORT_M 100.0f
 #define ACC_DIST_QUARTER_M 402.336f  // 1/4 mile
+#define ACC_GRADE_MIN_M 50.0f   // shorter runs: no grade (altitude noise would dominate)
+#define ACC_GRADE_MIN_N 10      // ... and at least this many samples with altitude
 
 typedef enum { ACC_IDLE = 0, ACC_ARMED, ACC_RUNNING, ACC_DONE } acc_phase_t;
 
-enum { ACC_T_0_100 = 0, ACC_T_0_200, ACC_T_100_200, ACC_T_100M, ACC_T_QUARTER, ACC_N };
+enum { ACC_T_0_50 = 0, ACC_T_0_100, ACC_T_0_200, ACC_T_100_200, ACC_T_100M, ACC_T_QUARTER, ACC_N };
 
 typedef struct {
     float t[ACC_N];      // seconds; < 0 = not reached
@@ -35,6 +41,9 @@ typedef struct {
     float duration_s;
     bool aborted;        // samples stopped (GPS lost): results up to that point
     bool low_rate;       // sampled at < 5 Hz: about +-0.1-0.5 s
+    bool grade_valid;    // grade_pct / climb_m known (altitude on every sample, >= ACC_GRADE_MIN_M)
+    float grade_pct;     // road grade over the run, % (+ uphill, - downhill)
+    float climb_m;       // altitude change over the run by that grade (m)
 } acc_result_t;
 
 typedef struct {
@@ -50,6 +59,14 @@ typedef struct {
     uint32_t p1_ms;        // that first moving sample
     float p1_kmh;
     float dist_m;
+    // altitude: set by acc_set_alt() before each acc_step()
+    float alt_m;
+    bool alt_ok;
+    float alt_stand;       // smoothed altitude while standing (start anchor of the grade fit)
+    bool alt_stand_ok;
+    bool alt_missing;      // a run sample without altitude: no grade for this run
+    double alt_ref;        // fit is done on (altitude - alt_ref): keeps the sums small
+    double fn, fd, fh, fdd, fdh;  // weighted least-squares sums: n, d, h, d*d, d*h
     acc_result_t res;      // current run while RUNNING, last run when DONE
 } acc_state_t;
 
@@ -58,6 +75,10 @@ void acc_init(acc_state_t *s);
 // One sample: receiver speed (km/h), when it arrived (ms), whether the fix is good, the measured
 // sample rate (Hz). Returns true when a run has just finished (s->res holds it).
 bool acc_step(acc_state_t *s, uint32_t t_ms, float kmh, bool valid, float rate_hz);
+
+// Altitude (m, GPS) of the sample passed to the next acc_step(); ok = false when unknown.
+// Without it the run is still timed, only the grade is missing.
+void acc_set_alt(acc_state_t *s, float alt_m, bool ok);
 
 // Restart: drop the current run or the last result and wait for a new start (stand 1 s again).
 void acc_restart(acc_state_t *s);

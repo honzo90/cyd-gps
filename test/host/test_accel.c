@@ -41,8 +41,10 @@ static void test_constant_acceleration_10hz(void)
     const double a = 7.0;  // 0-100 in 3.97 s
     const acc_result_t r = drive(a, 3037, 300, 100, 0, 10, &st);
     CHECK(st.phase == ACC_DONE && !r.aborted && !r.low_rate);
+    CHECK(NEAR(r.t[ACC_T_0_50], t_speed(a, 50), 0.03));
     CHECK(NEAR(r.t[ACC_T_0_100], t_speed(a, 100), 0.03));
     CHECK(NEAR(r.t[ACC_T_0_200], t_speed(a, 200), 0.03));
+    CHECK(!r.grade_valid);  // no altitude given
     CHECK(NEAR(r.t[ACC_T_100_200], t_speed(a, 200) - t_speed(a, 100), 0.02));
     CHECK(NEAR(r.t[ACC_T_100M], t_dist(a, 100), 0.03));
     CHECK(NEAR(r.t[ACC_T_QUARTER], t_dist(a, 402.336), 0.03));
@@ -177,6 +179,89 @@ static void test_restart(void)
     CHECK(st.phase == ACC_RUNNING);  // a new run starts normally
 }
 
+// Like drive(), with an altitude on every sample: the road rises grade_pct % along the distance,
+// plus GPS-like noise: a slow wander (+-amp m over ~8 s) and +-1 m jitter per sample.
+static acc_result_t drive_alt(double a, float v_end_kmh, double grade_pct, double amp, bool alt_ok,
+                              acc_state_t *st)
+{
+    const uint32_t t_go = 3000;
+    acc_init(st);
+    bool done = false;
+    unsigned seed = 12345;
+    for (uint32_t t = 0; t < 120000 && !done; t += 100) {
+        const double ts = t > t_go ? (t - t_go) / 1000.0 : 0;
+        double v = a * ts * 3.6, d = 0.5 * a * ts * ts;
+        if (v > v_end_kmh) {  // lift off: speed falls fast, distance hardly matters any more
+            v = v_end_kmh - (v - v_end_kmh) * 3;
+        }
+        seed = seed * 1103515245u + 12345u;
+        const double jitter = ((seed >> 16) % 2001) / 1000.0 - 1.0;  // -1..1 m
+        const double h = 300 + grade_pct / 100 * d + amp * sin(t / 1300.0) + jitter;
+        acc_set_alt(st, (float)h, alt_ok);
+        done = acc_step(st, t, (float)v, true, 10);
+    }
+    return st->res;
+}
+
+static void test_grade(void)
+{
+    acc_state_t st;
+    // 1/4 mile run, clean altitude: exact
+    acc_result_t r = drive_alt(5.0, 250, 4.0, 0, true, &st);
+    CHECK(r.grade_valid && NEAR(r.grade_pct, 4.0, 0.2));
+    CHECK(NEAR(r.climb_m, 0.04 * r.dist_m, 1.0));
+    r = drive_alt(5.0, 250, -3.0, 0, true, &st);
+    CHECK(r.grade_valid && NEAR(r.grade_pct, -3.0, 0.2) && r.climb_m < 0);
+    // noisy GPS altitude (+-3 m wander, +-1 m jitter): still within +-1.5 % over 400 m
+    r = drive_alt(5.0, 250, 4.0, 3.0, true, &st);
+    CHECK(r.grade_valid && NEAR(r.grade_pct, 4.0, 1.5));
+    r = drive_alt(5.0, 250, 0.0, 3.0, true, &st);
+    CHECK(r.grade_valid && NEAR(r.grade_pct, 0.0, 1.5));
+    // no altitude: timed, but no grade
+    r = drive_alt(5.0, 250, 4.0, 0, false, &st);
+    CHECK(!r.grade_valid && r.t[ACC_T_0_100] > 0);
+    // too short (lift at 30 km/h: ~7 m): no grade, the noise would be the answer
+    r = drive_alt(5.0, 30, 4.0, 0, true, &st);
+    CHECK(st.phase == ACC_DONE && !r.grade_valid);
+}
+
+static void test_grade_ignores_a_bad_start_altitude(void)
+{
+    // no altitude while standing, and the first moving reading is 8 m off (GPS glitch): the line is
+    // fitted through all the run samples, so one bad reading at the start must not tilt it
+    acc_state_t st;
+    acc_init(&st);
+    const double a = 5.0;
+    for (uint32_t t = 0; t < 120000 && st.phase != ACC_DONE; t += 100) {
+        const double ts = t > 3000 ? (t - 3000) / 1000.0 : 0;
+        double v = a * ts * 3.6;
+        if (v > 250) {
+            v = 250 - (v - 250) * 3;
+        }
+        const double d = 0.5 * a * ts * ts;
+        const bool first_moving = v >= ACC_TRIGGER_KMH && st.phase != ACC_RUNNING;
+        acc_set_alt(&st, (float)(300 + 0.04 * d + (first_moving ? 8 : 0)), v >= ACC_TRIGGER_KMH);
+        acc_step(&st, t, (float)v, true, 10);
+    }
+    CHECK(st.res.grade_valid && NEAR(st.res.grade_pct, 4.0, 0.3));
+}
+
+static void test_altitude_lost_mid_run(void)
+{
+    acc_state_t st;
+    acc_init(&st);
+    for (uint32_t t = 0; t <= 1500; t += 100) {
+        acc_set_alt(&st, 300, true);
+        acc_step(&st, t, 0, true, 10);
+    }
+    uint32_t t = 1600;
+    for (; t < 20000 && st.phase != ACC_DONE; t += 100) {
+        acc_set_alt(&st, 300, t != 5000);  // one sample without altitude
+        acc_step(&st, t, t < 15000 ? (t - 1500) / 1000.0f * 15 : 1, true, 10);
+    }
+    CHECK(st.phase == ACC_DONE && st.res.dist_m > 100 && !st.res.grade_valid);
+}
+
 static void test_elapsed(void)
 {
     acc_state_t st;
@@ -197,6 +282,9 @@ int main(void)
     test_next_run_after_stopping();
     test_jump_start_clamped();
     test_restart();
+    test_grade();
+    test_grade_ignores_a_bad_start_altitude();
+    test_altitude_lost_mid_run();
     test_elapsed();
     printf("%d/%d checks passed\n", s_run - s_fail, s_run);
     return s_fail != 0;

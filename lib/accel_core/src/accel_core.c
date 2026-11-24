@@ -2,7 +2,26 @@
 #include <math.h>
 #include <string.h>
 
-static const float k_speed_targets[2] = {100.0f, 200.0f};
+static const float k_speed_targets[3] = {50.0f, 100.0f, 200.0f};
+static const int k_speed_slots[3] = {ACC_T_0_50, ACC_T_0_100, ACC_T_0_200};
+
+#define ALT_STAND_W 5.0  // weight of the standing average in the fit (it is a mean of many readings)
+
+void acc_set_alt(acc_state_t *s, float alt_m, bool ok)
+{
+    s->alt_m = alt_m;
+    s->alt_ok = ok && alt_m == alt_m;  // not NaN
+}
+
+static void fit_add(acc_state_t *s, double d, double h, double w)
+{
+    h -= s->alt_ref;
+    s->fn += w;
+    s->fd += w * d;
+    s->fh += w * h;
+    s->fdd += w * d * d;
+    s->fdh += w * d * h;
+}
 static const float k_dist_targets[2] = {ACC_DIST_SHORT_M, ACC_DIST_QUARTER_M};
 
 void acc_init(acc_state_t *s)
@@ -52,10 +71,31 @@ static void start_run(acc_state_t *s, uint32_t t, float v)
     s->dist_m = v / 2 / 3.6f * (float)((t - t0) / 1000.0);  // from 0 to v in a straight line
     s->res.v_max = v;
     s->phase = ACC_RUNNING;  // low_rate is set by run_step(), which always follows
+    // grade fit: the standing average is the start point (distance 0); run samples are added by
+    // run_step() once their distance is final (not this first one: its start time is provisional)
+    s->fn = s->fd = s->fh = s->fdd = s->fdh = 0;
+    s->alt_missing = false;
+    s->alt_ref = s->alt_stand_ok ? s->alt_stand : s->alt_m;
+    if (s->alt_stand_ok) {
+        fit_add(s, 0, s->alt_stand, ALT_STAND_W);
+    }
+}
+
+static void grade(acc_state_t *s)
+{
+    acc_result_t *r = &s->res;
+    const double den = s->fn * s->fdd - s->fd * s->fd;
+    r->grade_valid = !s->alt_missing && s->fn >= ACC_GRADE_MIN_N && s->dist_m >= ACC_GRADE_MIN_M && den > 0;
+    if (r->grade_valid) {
+        const double slope = (s->fn * s->fdh - s->fd * s->fh) / den;  // metres up per metre
+        r->grade_pct = (float)(slope * 100);
+        r->climb_m = (float)(slope * s->dist_m);
+    }
 }
 
 static bool finish(acc_state_t *s, uint32_t last_ms, bool aborted)
 {
+    grade(s);
     s->res.dist_m = s->dist_m;
     s->res.duration_s = (float)((last_ms - s->t0_ms) / 1000.0);
     s->res.aborted = aborted;
@@ -90,12 +130,18 @@ static bool run_step(acc_state_t *s, uint32_t t, float v, float rate_hz)
     if (rate_hz < 5) {
         s->res.low_rate = true;
     }
-    for (int i = 0; i < 2; ++i) {
+    for (int i = 0; i < 3; ++i) {
         const float T = k_speed_targets[i];
-        if (s->res.t[i] < 0 && vp < T && v >= T) {
+        const int slot = k_speed_slots[i];
+        if (s->res.t[slot] < 0 && vp < T && v >= T) {
             const double tc = s->prev_ms + (double)(T - vp) / (v - vp) * (t - s->prev_ms);
-            s->res.t[i] = (float)((tc - s->t0_ms) / 1000.0);
+            s->res.t[slot] = (float)((tc - s->t0_ms) / 1000.0);
         }
+    }
+    if (s->alt_ok) {
+        fit_add(s, s->dist_m, s->alt_m, 1.0);
+    } else {
+        s->alt_missing = true;
     }
     for (int i = 0; i < 2; ++i) {
         const int slot = i ? ACC_T_QUARTER : ACC_T_100M;
@@ -149,6 +195,11 @@ bool acc_step(acc_state_t *s, uint32_t t, float v, bool valid, float rate_hz)
         if (!s->standing) {
             s->standing = true;
             s->stand_since = t;
+            s->alt_stand_ok = false;  // new stop, new place
+        }
+        if (s->alt_ok) {  // altitude at the start line: smoothed over ~1 s at 10 Hz
+            s->alt_stand = s->alt_stand_ok ? s->alt_stand + 0.1f * (s->alt_m - s->alt_stand) : s->alt_m;
+            s->alt_stand_ok = true;
         }
         if (t - s->stand_since >= ACC_STAND_MS) {
             s->phase = ACC_ARMED;

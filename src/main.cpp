@@ -293,7 +293,11 @@ static void publish_web(const gps_data_t &g)
     for (int i = 0; i < ACC_N; ++i) {
         w.acc_last[i] = a.has_last ? a.last.t[i] : -1;
         w.acc_best[i] = a.best[i];
+        w.acc_best_grade[i] = a.best_grade[i];
     }
+    static_assert(ACC_N == sizeof w.acc_last / sizeof w.acc_last[0], "web snapshot size");
+    w.acc_grade = a.has_last && a.last.grade_valid ? a.last.grade_pct : NAN;
+    w.acc_climb = a.has_last && a.last.grade_valid ? a.last.climb_m : NAN;
     w.acc_v100m = a.last.v_100m;
     w.acc_vquarter = a.last.v_quarter;
     w.acc_vmax = a.last.v_max;
@@ -341,7 +345,20 @@ static void on_reset_trip(lv_event_t *)
 }
 
 // ---- POMIAR: acceleration timer ------------------------------------------------------------
-static const char *const k_acc_names[ACC_N] = {"0-100 km/h", "0-200 km/h", "100-200 km/h", "100 m", "1/4 mili"};
+static const char *const k_acc_names[ACC_N] = {"0-50 km/h",    "0-100 km/h", "0-200 km/h",
+                                               "100-200 km/h", "100 m",      "1/4 mili"};
+
+// "pod gore 2.1%", "z gorki 1.4%", "plasko" (under 0.5 %: within what GPS altitude can tell)
+static void fmt_grade(char *buf, size_t n, const acc_result_t &r)
+{
+    if (!r.grade_valid) {
+        buf[0] = 0;
+    } else if (fabsf(r.grade_pct) < 0.5f) {
+        snprintf(buf, n, "plasko");
+    } else {
+        snprintf(buf, n, "%s %.1f%%", r.grade_pct > 0 ? "pod gore" : "z gorki", fabsf(r.grade_pct));
+    }
+}
 static lv_obj_t *s_acc_status, *s_acc_clock, *s_acc_speed, *s_acc_val[ACC_N], *s_acc_best[ACC_N], *s_acc_note;
 static lv_timer_t *s_acc_timer;  // deleted with the UI on a rotation
 
@@ -396,14 +413,22 @@ static void refresh_accel(lv_timer_t *)
             lv_label_set_text(s_acc_best[i], "");
         }
     }
-    if (a.phase == ACC_ARMED && !a.has_last) {
-        lv_label_set_text(s_acc_note, "Ruszaj - czas startuje sam");
-    } else if (a.has_last && a.phase != ACC_RUNNING && a.last.aborted) {
+    const bool shown = a.has_last && a.phase != ACC_RUNNING;  // a finished run on screen
+    if (shown && a.last.aborted) {
         lv_label_set_text(s_acc_note, "Przerwany: utrata GPS");
-    } else if (a.has_last && a.phase != ACC_RUNNING && a.last.low_rate) {
+    } else if (shown && a.last.low_rate) {
         lv_label_set_text(s_acc_note, "GPS 1 Hz: wynik przyblizony");
-    } else if (a.phase == ACC_DONE) {
-        lv_label_set_text_fmt(s_acc_note, "Vmax %.0f km/h, %.0f m. Zatrzymaj sie.", a.last.v_max, a.last.dist_m);
+    } else if (shown) {  // summary with the road grade (downhill runs are faster)
+        char g[24], line[64];
+        fmt_grade(g, sizeof g, a.last);
+        if (s_port) {
+            snprintf(line, sizeof line, "%.0f m%s%s", a.last.dist_m, g[0] ? ", " : "", g);
+        } else {
+            snprintf(line, sizeof line, "Vmax %.0f km/h, %.0f m%s%s", a.last.v_max, a.last.dist_m, g[0] ? ", " : "", g);
+        }
+        lv_label_set_text(s_acc_note, line);
+    } else if (a.phase == ACC_ARMED) {
+        lv_label_set_text(s_acc_note, "Ruszaj - czas startuje sam");
     } else {
         lv_label_set_text(s_acc_note, "Tylko na zamknietym torze.");
     }
@@ -430,7 +455,7 @@ static void build_accel_screen(lv_obj_t *t)
     s_acc_status = make_status(t);
 
     s_acc_clock = make_label(t, &lv_font_montserrat_32, 0xFFFFFF, 12, 38 + dy(), "0.00 s");
-    s_acc_speed = make_label(t, &lv_font_montserrat_14, k_caption, s_port ? 12 : 130, s_port ? 102 : 52, "");
+    s_acc_speed = make_label(t, &lv_font_montserrat_14, k_caption, s_port ? 12 : 130, s_port ? 100 : 52, "");
 
     // Restart: drop the current run or the last result, then stand 1 s and go again
     lv_obj_t *rb = lv_button_create(t);
@@ -446,12 +471,12 @@ static void build_accel_screen(lv_obj_t *t)
 
     for (int i = 0; i < ACC_N; ++i) {
         if (s_port) {  // name with the best time under it, value on the right
-            const int y = 124 + i * 34;
+            const int y = 120 + i * 30;
             make_label(t, &lv_font_montserrat_14, k_caption, 12, y, k_acc_names[i]);
-            s_acc_best[i] = make_label(t, &lv_font_montserrat_14, k_dim, 12, y + 16, "");
-            s_acc_val[i] = make_label(t, &lv_font_montserrat_20, 0xFFFFFF, 132, y + 5, "--");
+            s_acc_best[i] = make_label(t, &lv_font_montserrat_14, k_dim, 12, y + 15, "");
+            s_acc_val[i] = make_label(t, &lv_font_montserrat_20, 0xFFFFFF, 132, y + 4, "--");
         } else {
-            const int y = 84 + i * 24;
+            const int y = 80 + i * 22;
             make_label(t, &lv_font_montserrat_14, k_caption, 12, y + 4, k_acc_names[i]);
             s_acc_val[i] = make_label(t, &lv_font_montserrat_20, 0xFFFFFF, 118, y, "--");
             s_acc_best[i] = make_label(t, &lv_font_montserrat_14, k_dim, 224, y + 4, "");
@@ -461,7 +486,7 @@ static void build_accel_screen(lv_obj_t *t)
     lv_obj_set_width(s_acc_note, s_w - 16);
     lv_label_set_long_mode(s_acc_note, LV_LABEL_LONG_DOT);  // one line, also in portrait
     lv_obj_set_style_text_align(s_acc_note, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(s_acc_note, LV_ALIGN_BOTTOM_MID, 0, s_port ? -6 : -10);
+    lv_obj_align(s_acc_note, LV_ALIGN_BOTTOM_MID, 0, s_port ? -2 : -4);
     // 100 ms: the clock runs smoothly while the rest of the UI refreshes every 500 ms
     s_acc_timer = lv_timer_create(refresh_accel, 100, NULL);
 }

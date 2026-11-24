@@ -43,7 +43,9 @@ nie uruchomi sieci w 15 s, CYD wraca do poprzedniej.
 
 1. **Prędkościomierz** — duże cyfry, pasek, kierunek jazdy (strzałka + N/NE/E…, od 5 km/h; moduł
    nie ma kompasu, kierunek liczy GPS z ruchu).
-2. **POMIAR** — 0–100, 0–200, 100–200 km/h, 100 m, 1/4 mili. Stań na 1 s, ruszaj — czas startuje
+2. **POMIAR** — 0–50, 0–100, 0–200, 100–200 km/h, 100 m, 1/4 mili, plus nachylenie drogi
+   (pod górę / z górki, z wysokości GPS, orientacyjnie ±1–2 %, od 50 m przejazdu; przy rekordach na
+   stronie widać, na jakiej drodze padły). Stań na 1 s, ruszaj — czas startuje
    sam. „Restart” zeruje bieżący pomiar; przytrzymanie tytułu „POMIAR” kasuje najlepsze wyniki.
    GPS pracuje wtedy z częstotliwością 10 Hz. Tylko na zamkniętym torze lub placu.
 3. **Licznik** — trip, całkowity, maks., średnia, czas jazdy; przytrzymanie „Zeruj trip” zaczyna nowy

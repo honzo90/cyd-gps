@@ -22,14 +22,17 @@ while standing, position jumps (implied speed > 2 x receiver speed + 15 km/h) sk
 ## Screens (swipe left/right)
 
 1. Speedometer (large seven-segment digits) with the direction of travel from the GPS course (arrow + N/NE/E..., from 5 km/h; no compass in the module)
-2. Acceleration timer (POMIAR)
+2. Acceleration timer (POMIAR): 0-50/100/200, 100-200 km/h, 100 m, 1/4 mile, road grade
 3. Odometer: trip, total, max, average, moving time; long-press "Zeruj trip" resets the trip and starts a new GPX file
 4. GPS: position, altitude, satellites, HDOP, UTC, signal strength
 5. Wi-Fi: home network / hotspot, web page address, device password, updates, screen rotation (⟳ turns by 90°; also on the web page, USB command `R`)
 
 ## Acceleration timer ("POMIAR" screen)
 
-0-100, 0-200, 100-200 km/h, 100 m and 1/4 mile from the GPS Doppler speed. The GPS module is switched
+0-50, 0-100, 0-200, 100-200 km/h, 100 m and 1/4 mile from the GPS Doppler speed, with the road
+grade of the run (straight line fitted to GPS altitude vs distance over the whole run, anchored by the
+altitude averaged while standing; shown from 50 m, about +-1-2 %; records keep the grade they were set
+on, since downhill runs are faster). The GPS module is switched
 to 10 Hz at every start (`$PCAS02,100` for AT6558 clones, UBX CFG-RATE for u-blox; never saved in the
 module), and the measured rate is shown. Stand still for 1 s, then drive off: the clock starts where
 the speed left 0 (interpolated between samples) and the run ends when the speed drops by 5 km/h.
