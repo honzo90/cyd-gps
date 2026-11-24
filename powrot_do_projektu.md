@@ -41,6 +41,9 @@ nie uruchomi sieci w 15 s, CYD wraca do poprzedniej.
 
 ## Ekrany CYD (dolny pasek albo przesuwanie w lewo/prawo)
 
+Po włączeniu przez 2 s widać ekran startowy (ikona, nazwa, pasek). Przytrzymanie przycisku BOOT w tym
+czasie uruchamia kalibrację dotyku (ekran o tym nie informuje, celowo).
+
 Pasek na dole przełącza ekrany (aktywny ma nazwę). Ikona GPS w pasku: zielona = fix, żółta = szuka,
 czerwona = brak danych z modułu.
 

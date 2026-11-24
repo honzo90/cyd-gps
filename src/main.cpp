@@ -1177,8 +1177,8 @@ static void calib_done(const cyd_cal_t *cal, bool ok)
     s_rot_req = load_rotation();  // calibration always runs in landscape; now turn the UI back
 }
 
-// Start screen: icon, name, version, a bar filling over the 2 s in which BOOT (GPIO0) forces the
-// touch calibration. Deleted afterwards (no RAM kept). *bar receives the progress bar (0..100).
+// Start screen: icon, name and a bar filling over the 2 s in which BOOT (GPIO0) forces the touch
+// calibration. Nothing technical on it (the BOOT trick is in the notes). Deleted afterwards.
 static lv_obj_t *splash_create(lv_obj_t *scr, lv_obj_t **bar)
 {
     styles_init();
@@ -1188,18 +1188,14 @@ static lv_obj_t *splash_create(lv_obj_t *scr, lv_obj_t **bar)
     lv_obj_set_style_bg_color(p, lv_color_hex(k_bg), 0);
     lv_obj_set_style_bg_opa(p, LV_OPA_COVER, 0);
     lv_obj_t *icon = make_label(p, &lv_font_montserrat_48, k_accent, 0, 0, LV_SYMBOL_GPS);
-    lv_obj_align(icon, LV_ALIGN_CENTER, 0, -52);
+    lv_obj_align(icon, LV_ALIGN_CENTER, 0, -44);
     lv_obj_t *name = make_label(p, &lv_font_montserrat_32, k_text, 0, 0, "CYD GPS");
-    lv_obj_align(name, LV_ALIGN_CENTER, 0, 6);
-    lv_obj_t *ver = make_label(p, &lv_font_montserrat_14, k_caption, 0, 0, "wersja " FW_VERSION);
-    lv_obj_align(ver, LV_ALIGN_CENTER, 0, 36);
+    lv_obj_align(name, LV_ALIGN_CENTER, 0, 14);
     *bar = lv_bar_create(p);
     lv_obj_set_size(*bar, 140, 6);
-    lv_obj_align(*bar, LV_ALIGN_CENTER, 0, 64);
+    lv_obj_align(*bar, LV_ALIGN_CENTER, 0, 52);
     lv_obj_set_style_bg_color(*bar, lv_color_hex(k_raised), 0);
     lv_obj_set_style_bg_color(*bar, lv_color_hex(k_accent), LV_PART_INDICATOR);
-    lv_obj_t *hint = make_label(p, &lv_font_montserrat_14, k_dim, 0, 0, "BOOT = kalibracja dotyku");
-    lv_obj_align(hint, LV_ALIGN_BOTTOM_MID, 0, -10);
     return p;
 }
 
