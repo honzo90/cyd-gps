@@ -911,6 +911,18 @@ void setup()
                   (unsigned)ESP.getMinFreeHeap(), (unsigned)ESP.getMaxAllocHeap());
 }
 
+#ifdef BOOTLOG_WDT_TEST
+// Test build only (env cyd2usb_wdttest): block CPU 0 so the task watchdog must fire and the
+// restart log must name this task. Never in a release.
+static void wdt_hog(void *)
+{
+    Serial.println("WDT TEST: blocking CPU 0");
+    for (uint32_t t0 = millis(); millis() - t0 < 8000;) {
+    }
+    vTaskDelete(NULL);
+}
+#endif
+
 // Single-letter commands on the USB serial:
 //   n  toggle raw NMEA echo      T  zero the whole odometer (trip and total)
 // USB serial (115200): n = NMEA echo on/off, T = zero the whole odometer,
@@ -932,6 +944,11 @@ static void serial_commands()
         case 'B':
             bootlog_print();
             break;
+#ifdef BOOTLOG_WDT_TEST
+        case 'W':
+            xTaskCreatePinnedToCore(wdt_hog, "wdt_hog", 2048, NULL, 1, NULL, 0);
+            break;
+#endif
         case 'R':
             s_rot_req = (cyd_rotation() + 1) & 3;  // turn the screen by 90 degrees
             break;
@@ -971,6 +988,7 @@ void loop()
         abort();
     }
 #endif
+    bootlog_tick();
     serial_commands();
     gps_poll();
     net_poll();

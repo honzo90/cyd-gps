@@ -390,7 +390,7 @@ static void handle_status()
              d.acc_running ? "true" : "false", d.acc_aborted ? "true" : "false", d.acc_low_rate ? "true" : "false",
              (unsigned)d.rot);
     out += acc;
-    char boots[200];
+    char boots[400];
     bootlog_text(boots, sizeof boots);
     out += ",\"boots\":\"";
     json_escape(out, boots);
