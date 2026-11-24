@@ -554,10 +554,53 @@ static void on_runs_open(lv_event_t *)
     lv_obj_add_event_cb(close, on_runs_close, LV_EVENT_CLICKED, NULL);
 }
 
+// Restart feedback (~0.5 s): the ⟳ icon turns once, the clock and the results fade back in.
+static lv_obj_t *s_acc_rst_icon;
+
+static void anim_rotate(void *obj, int32_t v)
+{
+    lv_obj_set_style_transform_rotation((lv_obj_t *)obj, v, 0);
+}
+
+static void anim_opa(void *obj, int32_t v)
+{
+    lv_obj_set_style_opa((lv_obj_t *)obj, (lv_opa_t)v, 0);
+}
+
+static void restart_anim()
+{
+    lv_anim_t a;
+    if (s_acc_rst_icon) {
+        lv_obj_update_layout(s_acc_rst_icon);
+        lv_obj_set_style_transform_pivot_x(s_acc_rst_icon, lv_obj_get_width(s_acc_rst_icon) / 2, 0);
+        lv_obj_set_style_transform_pivot_y(s_acc_rst_icon, lv_obj_get_height(s_acc_rst_icon) / 2, 0);
+        lv_anim_init(&a);
+        lv_anim_set_var(&a, s_acc_rst_icon);
+        lv_anim_set_exec_cb(&a, anim_rotate);
+        lv_anim_set_values(&a, 0, 3600);  // 0.1 degree units: one full turn
+        lv_anim_set_duration(&a, 500);
+        lv_anim_set_path_cb(&a, lv_anim_path_ease_out);
+        lv_anim_start(&a);
+    }
+    lv_obj_t *fade[1 + ACC_N] = {s_acc_clock};
+    memcpy(fade + 1, s_acc_val, sizeof s_acc_val);
+    for (int i = 0; i < 1 + ACC_N; ++i) {
+        lv_anim_init(&a);
+        lv_anim_set_var(&a, fade[i]);
+        lv_anim_set_exec_cb(&a, anim_opa);
+        lv_anim_set_values(&a, LV_OPA_TRANSP, LV_OPA_COVER);
+        lv_anim_set_duration(&a, 350);
+        lv_anim_set_delay(&a, 30 * i);  // top to bottom, like a wipe
+        lv_anim_set_early_apply(&a, true);  // invisible at once, also during the delay
+        lv_anim_start(&a);
+    }
+}
+
 static void on_acc_restart(lv_event_t *)
 {
     accel_restart();
     refresh_accel(NULL);
+    restart_anim();
 }
 
 static void on_acc_reset(lv_event_t *)
@@ -590,6 +633,9 @@ static void build_accel_screen(lv_obj_t *t)
         lv_obj_set_style_text_font(l, &lv_font_montserrat_20, 0);
         lv_obj_center(l);
         lv_obj_add_event_cb(btn, b ? on_acc_restart : on_runs_open, LV_EVENT_CLICKED, NULL);
+        if (b) {
+            s_acc_rst_icon = l;
+        }
     }
 
     for (int i = 0; i < ACC_N; ++i) {
