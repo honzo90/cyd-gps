@@ -20,6 +20,7 @@
 #include "odometer.h"
 #include "seg7.h"
 #include "nav_core.h"
+#include "font_pl.h"
 #include <math.h>
 
 // ---- look: one palette, shared styles (a style shared by many objects costs no LVGL heap per object)
@@ -132,8 +133,8 @@ static lv_obj_t *make_label(lv_obj_t *parent, const lv_font_t *font, uint32_t co
 static lv_obj_t *make_value(lv_obj_t *parent, const char *caption, int col, int row, int y0 = 36)
 {
     const int x = 12 + col * (s_port ? 114 : 154), y = y0 + row * 44;
-    make_label(parent, &lv_font_montserrat_14, k_caption, x, y, caption);
-    return make_label(parent, &lv_font_montserrat_20, k_text, x, y + 16, "--");
+    make_label(parent, &font_pl_14, k_caption, x, y, caption);
+    return make_label(parent, &font_pl_20, k_text, x, y + 16, "--");
 }
 
 static lv_obj_t *s_tv;  // the screens (tileview)
@@ -150,7 +151,7 @@ static void nav_update();
 // Screen status pill (POMIAR: GOTOWY / POMIAR / ...).
 static lv_obj_t *make_pill(lv_obj_t *t, int x, int y)
 {
-    lv_obj_t *l = make_label(t, &lv_font_montserrat_14, k_text, x, y, "");
+    lv_obj_t *l = make_label(t, &font_pl_14, k_text, x, y, "");
     lv_obj_add_style(l, &s_st_pill, 0);
     return l;
 }
@@ -212,7 +213,7 @@ static void refresh_gps(const gps_data_t &g)
         lv_label_set_text(s_hdop, !g.fix || h <= 0 ? "--"
                                   : h <= 1.2        ? "b. dobra"
                                   : h <= 2.5        ? "dobra"
-                                  : h <= 5          ? "srednia"
+                                  : h <= 5          ? "średnia"
                                                     : "slaba");
         const bool moving = g.fix && g.course_valid && g.speed_kmh >= 5;
         lv_label_set_text(s_course, moving ? nav_cardinal((float)g.course_deg) : "--");
@@ -220,12 +221,12 @@ static void refresh_gps(const gps_data_t &g)
         if (g.baud == 0) {
             lv_label_set_text(s_diag, "Tryb pokazowy");
         } else if (!g.baud_locked) {
-            lv_label_set_text(s_diag, "Brak polaczenia z modulem GPS");
+            lv_label_set_text(s_diag, "Brak połączenia z modułem GPS");
         } else if (!g.fix) {
-            lv_label_set_text(s_diag, "Szukam satelitow...");
+            lv_label_set_text(s_diag, "Szukam satelitów...");
         } else {
-            lv_label_set_text_fmt(s_diag, "Sygnal GPS: %s",
-                                  g.snr_top4 >= 35 ? "dobry" : g.snr_top4 >= 28 ? "sredni" : "slaby");
+            lv_label_set_text_fmt(s_diag, "Sygnał GPS: %s",
+                                  g.snr_top4 >= 35 ? "dobry" : g.snr_top4 >= 28 ? "średni" : "słaby");
         }
         return;
     }
@@ -266,7 +267,7 @@ static void refresh_odo(const gps_data_t &g)
     char buf[32];
     fmt_km(buf, sizeof buf, o->trip_m);
     lv_label_set_text(s_trip, buf);
-    snprintf(buf, sizeof buf, o->total_m < 100000 ? "Calkowity  %.2f km" : "Calkowity  %.0f km", o->total_m / 1000.0);
+    snprintf(buf, sizeof buf, o->total_m < 100000 ? "Całkowity  %.2f km" : "Całkowity  %.0f km", o->total_m / 1000.0);
     lv_label_set_text(s_total, buf);
     snprintf(buf, sizeof buf, "%.1f km/h", o->max_kmh);
     lv_label_set_text(s_max, buf);
@@ -355,20 +356,20 @@ static void refresh_wifi()
 {
     net_status_t n;
     net_get(&n);
-    lv_label_set_text(s_wifi_btn_label, n.enabled ? "Wylacz Wi-Fi" : "Wlacz Wi-Fi");
+    lv_label_set_text(s_wifi_btn_label, n.enabled ? "Wyłącz Wi-Fi" : "Włącz Wi-Fi");
     char info[400];
     int len = 0;
     gh_status_t gh;
     gh_ota_get(&gh);
     if (n.enabled && !s_dev) {  // plain words: where to open the page, is the software current
         if (n.sta_connected) {
-            len += snprintf(info + len, sizeof info - len, "Polaczono z: %s\nStrona: http://%s\n", n.sta_ssid, n.sta_ip);
+            len += snprintf(info + len, sizeof info - len, "Połączono z: %s\nStrona: http://%s\n", n.sta_ssid, n.sta_ip);
         } else if (n.sta_configured) {
-            len += snprintf(info + len, sizeof info - len, n.sta_auth_failed ? "Zle haslo do sieci %s\n"
-                                                                              : "Lacze z siecia %s...\n",
+            len += snprintf(info + len, sizeof info - len, n.sta_auth_failed ? "Złe hasło do sieci %s\n"
+                                                                              : "Łączę z siecią %s...\n",
                             n.sta_ssid);
         } else {
-            len += snprintf(info + len, sizeof info - len, "Siec domowa nie jest ustawiona\n");
+            len += snprintf(info + len, sizeof info - len, "Sieć domowa nie jest ustawiona\n");
         }
         if (n.ap_on) {
             len += snprintf(info + len, sizeof info - len, "Hotspot: %s\nStrona: http://%s\n", n.ap_ssid, n.ap_ip);
@@ -377,37 +378,37 @@ static void refresh_wifi()
         const char *upd = gh.state == GH_UP_TO_DATE  ? "Oprogramowanie aktualne"
                           : gh.state == GH_AVAILABLE ? "Jest nowa wersja"
                           : gh.state == GH_CHECKING  ? "Sprawdzam aktualizacje..."
-                          : gh.state == GH_FAILED    ? "Nie udalo sie sprawdzic aktualizacji"
+                          : gh.state == GH_FAILED    ? "Nie udało się sprawdzić aktualizacji"
                                                      : "";
         if (gh.state == GH_INSTALLING) {
-            snprintf(info + len, sizeof info - len, "Instaluje aktualizacje: %u%%", gh.progress);
+            snprintf(info + len, sizeof info - len, "Instaluję aktualizacje: %u%%", gh.progress);
         } else {
             snprintf(info + len, sizeof info - len, "%s", upd);
         }
     } else if (!n.enabled) {
-        len = snprintf(info, sizeof info, "Wi-Fi wylaczone.\n\nWlacz, aby pobierac trasy GPX,\nwidziec dane na telefonie\ni aktualizowac firmware.");
+        len = snprintf(info, sizeof info, "Wi-Fi wyłączone.\n\nWłącz, aby pobierać trasy GPX,\nwidzieć dane na telefonie\ni aktualizować firmware.");
     } else {
         if (n.sta_connected) {
-            len += snprintf(info + len, sizeof info - len, "Siec: %s  (%d dBm)\nStrona: http://%s\n", n.sta_ssid,
+            len += snprintf(info + len, sizeof info - len, "Sieć: %s  (%d dBm)\nStrona: http://%s\n", n.sta_ssid,
                             n.rssi, n.sta_ip);
         } else if (n.sta_configured) {
-            len += snprintf(info + len, sizeof info - len, "Siec: %s - %s\n", n.sta_ssid,
+            len += snprintf(info + len, sizeof info - len, "Sieć: %s - %s\n", n.sta_ssid,
                             n.sta_auth_failed ? "ZLE HASLO" : "laczenie...");
         } else {
-            len += snprintf(info + len, sizeof info - len, "Siec domowa: nie ustawiona\n");
+            len += snprintf(info + len, sizeof info - len, "Sieć domowa: nie ustawiona\n");
         }
         if (n.ap_on) {
-            len += snprintf(info + len, sizeof info - len, "Hotspot: %s  (%u pol.)\nStrona: http://%s\n", n.ap_ssid,
+            len += snprintf(info + len, sizeof info - len, "Hotspot: %s  (%u poł.)\nStrona: http://%s\n", n.ap_ssid,
                             n.ap_clients, n.ap_ip);
         } else {
-            len += snprintf(info + len, sizeof info - len, "Hotspot: wylaczony\n");
+            len += snprintf(info + len, sizeof info - len, "Hotspot: wyłączony\n");
         }
-        len += snprintf(info + len, sizeof info - len, "Login: %s   Haslo: ******  (QR)\n", net_user());
+        len += snprintf(info + len, sizeof info - len, "Login: %s   Hasło: ******  (QR)\n", net_user());
         len += snprintf(info + len, sizeof info - len, "Czas NTP: %s   FW %s\n", n.ntp_ok ? "tak" : "nie", FW_VERSION);
         gh_ota_text(info + len, sizeof info - len);
     }
     lv_label_set_text(s_wifi_info, info);
-    // Same slot: "Instaluj x.y.z" when a newer release is known, otherwise "Sprawdz aktualizacje"
+    // Same slot: "Instaluj x.y.z" when a newer release is known, otherwise "Sprawdź aktualizacje"
     // (only in the home network: the hotspot has no internet).
     const bool avail = gh.state == GH_AVAILABLE;
     const bool can_check = n.enabled && n.sta_connected && !avail && gh.state != GH_INSTALLING;
@@ -422,7 +423,7 @@ static void refresh_wifi()
     show(s_chk_btn, can_check);
     const bool checking = gh.state == GH_CHECKING;
     lv_obj_set_state(s_chk_btn, LV_STATE_DISABLED, checking);
-    lv_label_set_text(s_chk_btn_label, checking ? "Sprawdzam..." : "Sprawdz aktualizacje");
+    lv_label_set_text(s_chk_btn_label, checking ? "Sprawdzam..." : "Sprawdź aktualizacje");
 }
 
 static void publish_web(const gps_data_t &g)
@@ -511,15 +512,15 @@ static void on_reset_trip(lv_event_t *)
 static const char *const k_acc_names[ACC_N] = {"0-50 km/h",    "0-100 km/h", "0-200 km/h",
                                                "100-200 km/h", "100 m",      "1/4 mili"};
 
-// "pod gore 2.1%", "z gorki 1.4%", "plasko" (under 0.5 %: within what GPS altitude can tell)
+// "pod górę 2.1%", "z górki 1.4%", "płasko" (under 0.5 %: within what GPS altitude can tell)
 static void fmt_grade(char *buf, size_t n, const acc_result_t &r)
 {
     if (!r.grade_valid) {
         buf[0] = 0;
     } else if (fabsf(r.grade_pct) < 0.5f) {
-        snprintf(buf, n, "plasko");
+        snprintf(buf, n, "płasko");
     } else {
-        snprintf(buf, n, "%s %.1f%%", r.grade_pct > 0 ? "pod gore" : "z gorki", fabsf(r.grade_pct));
+        snprintf(buf, n, "%s %.1f%%", r.grade_pct > 0 ? "pod górę" : "z górki", fabsf(r.grade_pct));
     }
 }
 static lv_obj_t *s_acc_status, *s_acc_clock, *s_acc_speed, *s_acc_val[ACC_N], *s_acc_best[ACC_N], *s_acc_note;
@@ -546,7 +547,7 @@ static void refresh_accel(lv_timer_t *)
         st = s_dev ? "BRAK FIX" : "BRAK GPS";
         col = k_err;
     } else if (a.rate_hz > 0 && a.rate_hz < 5) {
-        st = s_dev ? "GPS 1 Hz" : "SLABY GPS";
+        st = s_dev ? "GPS 1 Hz" : "SŁABY GPS";
         col = k_warn;
     } else if (a.phase == ACC_RUNNING) {
         st = "POMIAR";
@@ -585,9 +586,9 @@ static void refresh_accel(lv_timer_t *)
     }
     const bool shown = a.has_last && a.phase != ACC_RUNNING;  // a finished run on screen
     if (shown && a.last.aborted) {
-        lv_label_set_text(s_acc_note, "Przerwany: utrata GPS");
+        lv_label_set_text(s_acc_note, "Przerwany: utracono GPS");
     } else if (shown && a.last.low_rate) {
-        lv_label_set_text(s_acc_note, s_dev ? "GPS 1 Hz: wynik przyblizony" : "Slaby GPS: wynik przyblizony");
+        lv_label_set_text(s_acc_note, s_dev ? "GPS 1 Hz: wynik przybliżony" : "Słaby GPS: wynik przybliżony");
     } else if (shown) {  // summary with the road grade (downhill runs are faster)
         char g[24], line[64];
         fmt_grade(g, sizeof g, a.last);
@@ -603,15 +604,15 @@ static void refresh_accel(lv_timer_t *)
         const float m = acc_stats_mean(&a.stats, ACC_T_0_100);
         if (m > 0) {
             char line[64];
-            snprintf(line, sizeof line, s_port ? "Pomiary: %lu, sr. 0-100 %.2f s  " LV_SYMBOL_RIGHT
-                                               : "Pomiary: %lu  " LV_SYMBOL_RIGHT "\nsr. 0-100 %.2f s",
+            snprintf(line, sizeof line, s_port ? "Pomiary: %lu, śr. 0-100 %.2f s  " LV_SYMBOL_RIGHT
+                                               : "Pomiary: %lu  " LV_SYMBOL_RIGHT "\nśr. 0-100 %.2f s",
                      (unsigned long)a.stats.runs, m);
             lv_label_set_text(s_acc_note, line);
         } else {
             lv_label_set_text_fmt(s_acc_note, "Pomiary: %lu  " LV_SYMBOL_RIGHT, (unsigned long)a.stats.runs);
         }
     } else {
-        lv_label_set_text(s_acc_note, "Tylko na zamknietym torze.");
+        lv_label_set_text(s_acc_note, "Tylko na zamkniętym torze.");
     }
 }
 
@@ -650,10 +651,10 @@ static void on_runs_open(lv_event_t *)
     lv_obj_add_flag(s_runs_panel, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_event_cb(s_runs_panel, on_runs_close, LV_EVENT_CLICKED, NULL);  // tap anywhere closes
 
-    make_label(s_runs_panel, &lv_font_montserrat_20, 0xFFFFFF, 12, 8, "Ostatnie pomiary");
+    make_label(s_runs_panel, &font_pl_20, 0xFFFFFF, 12, 8, "Ostatnie pomiary");
     if (!n) {
-        make_label(s_runs_panel, &lv_font_montserrat_14, 0x9AA4AE, 12, 48,
-                   gpx_log_sd_ok() ? "Brak zapisanych pomiarow." : "Brak karty SD.");
+        make_label(s_runs_panel, &font_pl_14, 0x9AA4AE, 12, 48,
+                   gpx_log_sd_ok() ? "Brak zapisanych pomiarów." : "Brak karty SD.");
     } else {
         // columns: one label each, rows separated by '\n' (same line height keeps them aligned)
         const int nc = s_port ? 4 : 5;
@@ -675,7 +676,7 @@ static void on_runs_open(lv_event_t *)
             if (r.aborted) {
                 snprintf(cell[4], sizeof cell[4], s_port ? "prz." : "przerw.");
             } else if (r.low_rate) {
-                snprintf(cell[4], sizeof cell[4], s_dev ? "1 Hz" : "przyb.");
+                snprintf(cell[4], sizeof cell[4], s_dev ? "1 Hz" : "przybl.");
             } else if (!isnan(r.grade_pct)) {
                 snprintf(cell[4], sizeof cell[4], "%+.0f%%", r.grade_pct);
             } else {
@@ -694,8 +695,8 @@ static void on_runs_open(lv_event_t *)
         for (int c = 0; c < nc; ++c) {
             const int x = s_port ? xp[c] : xl[c];
             const char *h = s_port && c == 3 ? "" : head[c];
-            make_label(s_runs_panel, &lv_font_montserrat_14, k_caption, x, y0, h);
-            lv_obj_t *l = make_label(s_runs_panel, &lv_font_montserrat_14, c == 1 ? 0xFFFFFF : 0xC8D0D8, x, y0 + 20,
+            make_label(s_runs_panel, &font_pl_14, k_caption, x, y0, h);
+            lv_obj_t *l = make_label(s_runs_panel, &font_pl_14, c == 1 ? 0xFFFFFF : 0xC8D0D8, x, y0 + 20,
                                      col[c]);
             lv_obj_set_style_text_line_space(l, 2, 0);
         }
@@ -708,12 +709,12 @@ static void on_runs_open(lv_event_t *)
         k += snprintf(sum + k, sizeof sum - k, ", naj. %.2f s", a.best[ACC_T_0_100]);
     }
     if (m > 0) {
-        k += snprintf(sum + k, sizeof sum - k, "\nsr. 0-100 %.2f s", m);
+        k += snprintf(sum + k, sizeof sum - k, "\nśr. 0-100 %.2f s", m);
         if (sd >= 0 && s_dev) {
             snprintf(sum + k, sizeof sum - k, " (+-%.2f)", sd);
         }
     }
-    lv_obj_t *sl = make_label(s_runs_panel, &lv_font_montserrat_14, 0x9AA4AE, 12, 0, sum);
+    lv_obj_t *sl = make_label(s_runs_panel, &font_pl_14, 0x9AA4AE, 12, 0, sum);
     lv_obj_align(sl, LV_ALIGN_BOTTOM_LEFT, 12, s_port ? -46 : -6);
     lv_obj_t *close = lv_button_create(s_runs_panel);
     lv_obj_set_size(close, 96, 34);
@@ -784,7 +785,7 @@ static void build_accel_screen(lv_obj_t *t)
 {
     // top row: status pill, speed + GPS rate; icon buttons (list, restart) on the right
     s_acc_status = make_pill(t, 10, 8);
-    s_acc_speed = make_label(t, &lv_font_montserrat_14, k_caption, s_port ? 12 : 120, s_port ? 40 : 11, "");
+    s_acc_speed = make_label(t, &font_pl_14, k_caption, s_port ? 12 : 120, s_port ? 40 : 11, "");
     for (int b = 0; b < 2; ++b) {
         lv_obj_t *btn = make_button(t, b ? LV_SYMBOL_REFRESH : LV_SYMBOL_LIST, 46, 32);
         lv_obj_align(btn, LV_ALIGN_TOP_RIGHT, -8 - (b ? 0 : 52), 4);
@@ -794,12 +795,12 @@ static void build_accel_screen(lv_obj_t *t)
         }
     }
     // the clock, large; long press clears the best times (rare, so no extra button)
-    s_acc_clock = make_label(t, &lv_font_montserrat_48, k_text, 10, s_port ? 52 : 34, "0.00 s");
+    s_acc_clock = make_label(t, &font_pl_48, k_text, 10, s_port ? 52 : 34, "0.00 s");
     lv_obj_add_flag(s_acc_clock, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_event_cb(s_acc_clock, on_acc_reset, LV_EVENT_LONG_PRESSED, NULL);
 
     // note (result summary / hint / run count): tap = list of the last runs
-    s_acc_note = make_label(t, &lv_font_montserrat_14, k_caption, 0, 0, "");
+    s_acc_note = make_label(t, &font_pl_14, k_caption, 0, 0, "");
     if (s_port) {
         lv_obj_set_width(s_acc_note, s_w - 20);
         lv_label_set_long_mode(s_acc_note, LV_LABEL_LONG_DOT);
@@ -816,15 +817,15 @@ static void build_accel_screen(lv_obj_t *t)
     if (s_port) {  // table: name | last | best, with a small column header
         const int y0 = 120, rh = 23;
         make_card(t, 6, y0, s_w - 12, 18 + ACC_N * rh + 4);
-        lv_obj_t *h1 = make_label(t, &lv_font_montserrat_14, k_dim, 120, y0 + 2, "ostatni");
-        lv_obj_t *h2 = make_label(t, &lv_font_montserrat_14, k_dim, 0, 0, "naj.");
+        lv_obj_t *h1 = make_label(t, &font_pl_14, k_dim, 120, y0 + 2, "ostatni");
+        lv_obj_t *h2 = make_label(t, &font_pl_14, k_dim, 0, 0, "naj.");
         lv_obj_align(h2, LV_ALIGN_TOP_RIGHT, -14, y0 + 2);
         (void)h1;
         for (int i = 0; i < ACC_N; ++i) {
             const int y = y0 + 18 + i * rh;
-            make_label(t, &lv_font_montserrat_14, k_caption, 14, y + 4, k_acc_names[i]);
-            s_acc_val[i] = make_label(t, &lv_font_montserrat_20, k_text, 120, y, "--");
-            s_acc_best[i] = make_label(t, &lv_font_montserrat_14, k_caption, 0, y + 4, "");
+            make_label(t, &font_pl_14, k_caption, 14, y + 4, k_acc_names[i]);
+            s_acc_val[i] = make_label(t, &font_pl_20, k_text, 120, y, "--");
+            s_acc_best[i] = make_label(t, &font_pl_14, k_caption, 0, y + 4, "");
             lv_obj_align(s_acc_best[i], LV_ALIGN_TOP_RIGHT, -14, y + 4);
         }
     } else {  // 2 columns x 3 rows: name, value, best beside the value
@@ -832,9 +833,9 @@ static void build_accel_screen(lv_obj_t *t)
         make_card(t, 6, y0, s_w - 12, 3 * rh + 2);
         for (int i = 0; i < ACC_N; ++i) {
             const int x = 16 + (i / 3) * 152, y = y0 + 2 + (i % 3) * rh;
-            make_label(t, &lv_font_montserrat_14, k_caption, x, y + 2, k_acc_names[i]);
-            s_acc_val[i] = make_label(t, &lv_font_montserrat_20, k_text, x, y + 16, "--");
-            s_acc_best[i] = make_label(t, &lv_font_montserrat_14, k_caption, x + 66, y + 20, "");
+            make_label(t, &font_pl_14, k_caption, x, y + 2, k_acc_names[i]);
+            s_acc_val[i] = make_label(t, &font_pl_20, k_text, x, y + 16, "--");
+            s_acc_best[i] = make_label(t, &font_pl_14, k_caption, x + 66, y + 20, "");
             lv_obj_set_width(s_acc_best[i], 72);
             lv_obj_set_style_text_align(s_acc_best[i], LV_TEXT_ALIGN_RIGHT, 0);
         }
@@ -846,7 +847,7 @@ static void build_accel_screen(lv_obj_t *t)
 static void build_speedo_screen(lv_obj_t *t)
 {
     // trip / max / satellites on top; the digits are the hero
-    s_spd_info = make_label(t, &lv_font_montserrat_14, k_caption, 12, 8, "");
+    s_spd_info = make_label(t, &font_pl_14, k_caption, 12, 8, "");
 
     // Landscape: 3 digits of 72 x 116 px, 15 px stroke: 3*72 + 2*14 = 244 px wide, centred.
     // Portrait: 66 x 120 px, 14 px stroke: 3*66 + 2*10 = 218 px in the 240 px width.
@@ -858,9 +859,9 @@ static void build_speedo_screen(lv_obj_t *t)
     }
     const int y_scale = s_port ? 164 : 152;  // row under the digits: scale, (direction,) unit
 
-    lv_obj_t *unit = make_label(t, &lv_font_montserrat_20, k_caption, 0, 0, "km/h");
+    lv_obj_t *unit = make_label(t, &font_pl_20, k_caption, 0, 0, "km/h");
     lv_obj_align(unit, LV_ALIGN_TOP_RIGHT, -mx, y_scale);
-    s_spd_scale = make_label(t, &lv_font_montserrat_14, k_dim, mx, y_scale + 4, "");
+    s_spd_scale = make_label(t, &font_pl_14, k_dim, mx, y_scale + 4, "");
 
     s_spd_bar = lv_bar_create(t);
     lv_obj_set_size(s_spd_bar, dw, 10);
@@ -879,7 +880,7 @@ static void build_speedo_screen(lv_obj_t *t)
     lv_obj_set_style_line_rounded(s_dir_arrow, true, 0);
     set_arrow(0);
     lv_obj_add_flag(s_dir_arrow, LV_OBJ_FLAG_HIDDEN);
-    s_dir_text = make_label(t, &lv_font_montserrat_20, k_text, s_port ? 102 : 140, s_port ? 215 : y_scale - 2, "--");
+    s_dir_text = make_label(t, &font_pl_20, k_text, s_port ? 102 : 140, s_port ? 215 : y_scale - 2, "--");
 }
 
 static void on_wifi_toggle(lv_event_t *)
@@ -964,15 +965,15 @@ static void on_qr_open(lv_event_t *)
     lv_obj_center(qr);
 
     if (s_port) {  // portrait: text under the code
-        lv_obj_t *info = make_label(s_qr_panel, &lv_font_montserrat_14, 0xC8D0D8, 12, 192, "");
-        lv_label_set_text_fmt(info, "Zeskanuj telefonem: strona bez\nhasla przez 30 dni.\nHaslo (%s): %s", net_user(),
+        lv_obj_t *info = make_label(s_qr_panel, &font_pl_14, 0xC8D0D8, 12, 192, "");
+        lv_label_set_text_fmt(info, "Zeskanuj telefonem: strona bez\nhasła przez 30 dni.\nHasło (%s): %s", net_user(),
                               n.dev_pass);
-        s_qr_left = make_label(s_qr_panel, &lv_font_montserrat_14, 0xFFB347, 12, 250, "");
+        s_qr_left = make_label(s_qr_panel, &font_pl_14, 0xFFB347, 12, 250, "");
     } else {
-        make_label(s_qr_panel, &lv_font_montserrat_20, 0xFFFFFF, 196, 10, "Zeskanuj\ntelefonem");
-        lv_obj_t *info = make_label(s_qr_panel, &lv_font_montserrat_14, 0xC8D0D8, 196, 66, "");
-        lv_label_set_text_fmt(info, "Strona bez hasla\nprzez 30 dni.\n\nHaslo (%s):\n%s", net_user(), n.dev_pass);
-        s_qr_left = make_label(s_qr_panel, &lv_font_montserrat_14, 0xFFB347, 196, 160, "");
+        make_label(s_qr_panel, &font_pl_20, 0xFFFFFF, 196, 10, "Zeskanuj\ntelefonem");
+        lv_obj_t *info = make_label(s_qr_panel, &font_pl_14, 0xC8D0D8, 196, 66, "");
+        lv_label_set_text_fmt(info, "Strona bez hasła\nprzez 30 dni.\n\nHasło (%s):\n%s", net_user(), n.dev_pass);
+        s_qr_left = make_label(s_qr_panel, &font_pl_14, 0xFFB347, 196, 160, "");
     }
 
     lv_obj_t *close = lv_button_create(s_qr_panel);
@@ -1019,7 +1020,7 @@ static void build_wifi_screen(lv_obj_t *t)
     // the card clips the text: a long hotspot description never runs under the buttons
     const int ch = s_port ? 164 : 126;
     lv_obj_t *card = make_card(t, 6, 6, s_w - 12, ch);
-    s_wifi_info = make_label(card, &lv_font_montserrat_14, k_text2, 8, 6, "");
+    s_wifi_info = make_label(card, &font_pl_14, k_text2, 8, 6, "");
     lv_obj_set_width(s_wifi_info, s_w - 12 - 16);
     lv_obj_set_style_text_line_space(s_wifi_info, 3, 0);
 
@@ -1048,7 +1049,7 @@ static void build_wifi_screen(lv_obj_t *t)
     lv_obj_add_event_cb(qr, on_qr_open, LV_EVENT_LONG_PRESSED, NULL);
 
     // Rotate the screen by 90 degrees per tap (remembered; also on the web page).
-    lv_obj_t *rot = make_button(t, LV_SYMBOL_REFRESH " Obroc", small, bh);
+    lv_obj_t *rot = make_button(t, LV_SYMBOL_REFRESH " Obróć", small, bh);
     lv_obj_set_pos(rot, s_port ? 12 + small : 8 + wide + 4, y2);
     lv_obj_add_event_cb(rot, on_rotate, LV_EVENT_CLICKED, NULL);
 
@@ -1063,15 +1064,15 @@ static void build_gps_screen(lv_obj_t *t)
     // portrait: latitude and longitude need a full row each, the rest is shifted down by one row
     const int y0 = 10, r = s_port ? 1 : 0;
     make_card(t, 6, y0 - 4, s_w - 12, (4 + r) * 44 - 2);
-    s_lat = make_value(t, "Szerokosc", 0, 0, y0);
-    s_lon = make_value(t, "Dlugosc", s_port ? 0 : 1, r, y0);
-    s_alt = make_value(t, "Wysokosc", 0, 1 + r, y0);
-    s_speed = make_value(t, "Predkosc", 1, 1 + r, y0);
+    s_lat = make_value(t, "Szerokość", 0, 0, y0);
+    s_lon = make_value(t, "Długość", s_port ? 0 : 1, r, y0);
+    s_alt = make_value(t, "Wysokość", 0, 1 + r, y0);
+    s_speed = make_value(t, "Prędkość", 1, 1 + r, y0);
     s_sats = make_value(t, "Satelity", 0, 2 + r, y0);
-    s_hdop = make_value(t, s_dev ? "HDOP" : "Dokladnosc", 1, 2 + r, y0);
+    s_hdop = make_value(t, s_dev ? "HDOP" : "Dokładność", 1, 2 + r, y0);
     s_course = make_value(t, s_dev ? "Kurs" : "Kierunek", 0, 3 + r, y0);
     s_time = make_value(t, s_dev ? "Czas UTC" : "Godzina", 1, 3 + r, y0);
-    s_diag = make_label(t, &lv_font_montserrat_14, k_dim, 0, 0, "");
+    s_diag = make_label(t, &font_pl_14, k_dim, 0, 0, "");
     lv_obj_set_width(s_diag, s_w - 16);  // wraps to two lines in portrait
     lv_obj_set_style_text_align(s_diag, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_align(s_diag, LV_ALIGN_TOP_MID, 0, y0 + (4 + r) * 44);
@@ -1080,17 +1081,17 @@ static void build_gps_screen(lv_obj_t *t)
 static void build_odo_screen(lv_obj_t *t)
 {
     // trip is the hero; total beside it (landscape) or under it (portrait)
-    make_label(t, &lv_font_montserrat_14, k_caption, 12, 6, "Trip");
-    s_trip = make_label(t, &lv_font_montserrat_48, k_text, 10, 20, "--");
-    s_total = make_label(t, &lv_font_montserrat_14, k_text2, 0, 0, "--");  // "Calkowity 1287 km", top right
+    make_label(t, &font_pl_14, k_caption, 12, 6, "Trip");
+    s_trip = make_label(t, &font_pl_48, k_text, 10, 20, "--");
+    s_total = make_label(t, &font_pl_14, k_text2, 0, 0, "--");  // "Całkowity 1287 km", top right
     lv_obj_align(s_total, LV_ALIGN_TOP_RIGHT, -12, 6);
 
     const int y0 = s_port ? 86 : 82;
     make_card(t, 6, y0 - 4, s_w - 12, 2 * 44 - 2);
-    s_max = make_value(t, "Maks. predkosc", 0, 0, y0);
-    s_avg = make_value(t, s_port ? "Sr. w ruchu" : "Srednia (w ruchu)", 1, 0, y0);
+    s_max = make_value(t, "Maks. prędkość", 0, 0, y0);
+    s_avg = make_value(t, s_port ? "Śr. w ruchu" : "Średnia (w ruchu)", 1, 0, y0);
     s_moving = make_value(t, "Czas jazdy", 0, 1, y0);
-    s_now = make_value(t, "Predkosc", 1, 1, y0);
+    s_now = make_value(t, "Prędkość", 1, 1, y0);
 
     // bottom: SD state + trip reset (long press)
     const int yb = y0 + 2 * 44 + 2;
@@ -1098,7 +1099,7 @@ static void build_odo_screen(lv_obj_t *t)
     lv_obj_t *btn = make_button(t, s_port ? "Zeruj trip (przytrzymaj)" : "Zeruj (przytrzymaj)", bw, 30);
     lv_obj_set_style_bg_color(btn, lv_color_hex(0x8A2E2E), LV_STATE_PRESSED);  // destructive
     lv_obj_add_event_cb(btn, on_reset_trip, LV_EVENT_LONG_PRESSED, NULL);
-    s_sd = make_label(t, &lv_font_montserrat_14, k_dim, 12, 0, "");
+    s_sd = make_label(t, &font_pl_14, k_dim, 12, 0, "");
     lv_label_set_long_mode(s_sd, LV_LABEL_LONG_DOT);
     if (s_port) {
         lv_obj_set_width(s_sd, s_w - 24);
@@ -1110,7 +1111,7 @@ static void build_odo_screen(lv_obj_t *t)
         lv_obj_set_pos(btn, s_w - 8 - bw, yb + 2);
     }
 
-    s_reset_note = make_label(t, &lv_font_montserrat_20, k_ok, 0, 0, "Trip wyzerowany");
+    s_reset_note = make_label(t, &font_pl_20, k_ok, 0, 0, "Trip wyzerowany");
     lv_obj_align(s_reset_note, LV_ALIGN_CENTER, 0, 0);
     lv_obj_add_flag(s_reset_note, LV_OBJ_FLAG_HIDDEN);
 }
@@ -1122,7 +1123,7 @@ static void build_odo_screen(lv_obj_t *t)
 static lv_obj_t *s_nav, *s_nav_item[5];
 static const char *const k_nav_icon[5] = {LV_SYMBOL_HOME, LV_SYMBOL_CHARGE, LV_SYMBOL_LOOP, LV_SYMBOL_GPS,
                                           LV_SYMBOL_WIFI};
-static const char *const k_nav_name[5] = {"Predkosc", "Pomiar", "Licznik", "GPS", "Wi-Fi"};
+static const char *const k_nav_name[5] = {"Prędkość", "Pomiar", "Licznik", "GPS", "Wi-Fi"};
 
 static void nav_update()
 {
@@ -1311,9 +1312,9 @@ static lv_obj_t *splash_create(lv_obj_t *scr, lv_obj_t **bar)
     lv_obj_set_size(p, LV_PCT(100), LV_PCT(100));
     lv_obj_set_style_bg_color(p, lv_color_hex(k_bg), 0);
     lv_obj_set_style_bg_opa(p, LV_OPA_COVER, 0);
-    lv_obj_t *icon = make_label(p, &lv_font_montserrat_48, k_accent, 0, 0, LV_SYMBOL_GPS);
+    lv_obj_t *icon = make_label(p, &font_pl_48, k_accent, 0, 0, LV_SYMBOL_GPS);
     lv_obj_align(icon, LV_ALIGN_CENTER, 0, -44);
-    lv_obj_t *name = make_label(p, &lv_font_montserrat_32, k_text, 0, 0, "CYD GPS");
+    lv_obj_t *name = make_label(p, &font_pl_32, k_text, 0, 0, "CYD GPS");
     lv_obj_align(name, LV_ALIGN_CENTER, 0, 14);
     *bar = lv_bar_create(p);
     lv_obj_set_size(*bar, 140, 6);
@@ -1460,7 +1461,7 @@ void loop()
     static bool warned;
     if (!warned) {
         warned = true;
-        lv_obj_t *w = make_label(lv_layer_top(), &lv_font_montserrat_20, 0xFF5A5A, 0, 0, "TEST ROLLBACK: crash za 8 s");
+        lv_obj_t *w = make_label(lv_layer_top(), &font_pl_20, 0xFF5A5A, 0, 0, "TEST ROLLBACK: crash za 8 s");
         lv_obj_align(w, LV_ALIGN_CENTER, 0, 0);
         Serial.println("ROLLBACK TEST: running " FW_VERSION ", crashing at 8 s");
     }

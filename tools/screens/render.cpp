@@ -202,6 +202,24 @@ static void save_png(const char *dir, const char *name)
     fclose(f);
 }
 
+// region (x, y, w, h) of the screen, each pixel z x z: to inspect small text
+static void save_zoom(const char *dir, const char *name, int x0, int y0, int w, int h, int z)
+{
+    const int sw = lv_display_get_horizontal_resolution(s_disp);
+    char path[512];
+    snprintf(path, sizeof path, "%s/%s.ppm", dir, name);
+    FILE *f = fopen(path, "wb");
+    fprintf(f, "P6\n%d %d\n255\n", w * z, h * z);
+    for (int y = 0; y < h * z; ++y)
+        for (int x = 0; x < w * z; ++x) {
+            const uint16_t c = s_fb[(y0 + y / z) * sw + x0 + x / z];
+            const uint8_t rgb[3] = {(uint8_t)((c >> 11) * 255 / 31), (uint8_t)(((c >> 5) & 63) * 255 / 63),
+                                    (uint8_t)((c & 31) * 255 / 31)};
+            fwrite(rgb, 1, 3, f);
+        }
+    fclose(f);
+}
+
 static void settle()
 {
     for (int i = 0; i < 40; ++i) {
@@ -223,6 +241,22 @@ int main(int argc, char **argv)
     lv_obj_t *scr = lv_screen_active();
     lv_obj_set_style_bg_color(scr, lv_color_hex(k_bg), 0);
     lv_obj_remove_flag(scr, LV_OBJ_FLAG_SCROLLABLE);
+    {  // font check: Polish letters in every size
+        lv_obj_t *p = lv_obj_create(scr);
+        lv_obj_remove_style_all(p);
+        lv_obj_set_size(p, 320, 240);
+        lv_obj_set_style_bg_color(p, lv_color_hex(k_bg), 0);
+        lv_obj_set_style_bg_opa(p, LV_OPA_COVER, 0);
+        make_label(p, &font_pl_14, k_text, 4, 2, "Zażółć gęślą jaźń. ĄĆĘŁŃÓŚŹŻ Średnia");
+        make_label(p, &font_pl_20, k_text, 4, 22, "Zażółć gęślą jaźń ĄĘŁŚŻ");
+        make_label(p, &font_pl_32, k_text, 4, 50, "łódź Ćma Żółw ś");
+        make_label(p, &font_pl_48, k_text, 4, 92, "Łąka źó");
+        make_label(p, &font_pl_48, k_text, 4, 160, "ŚĆŻ ęń");
+        settle();
+        save_png(dir, "fonty");
+        save_zoom(dir, "fonty-14-20", 0, 0, 260, 52, 4);
+        lv_obj_delete(p);
+    }
     for (uint8_t rot = 0; rot < 2; ++rot) {  // start screen, bar at 60 %
         cyd_set_rotation(rot);
         lv_obj_t *bar;

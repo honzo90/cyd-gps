@@ -18,7 +18,8 @@ fi
 INC="-Itools/screens/host -Isrc -Ilib/accel_core/src -Ilib/cyd_common/src -Ilib/nav_core/src -Ilib/odo_core/src"
 LIBC="lib/accel_core/src/accel_core.c lib/accel_core/src/acc_hist.c lib/nav_core/src/nav_core.c lib/odo_core/src/odo_core.c lib/cyd_common/src/cyd_calib_ui.c lib/cyd_common/src/touch_cal.c lib/cyd_common/src/cyd_rot.c"
 for f in $LIBC; do cc -c $CF $INC "$f" -o "$B/$(basename "$f" .c).o"; done
-c++ -std=c++17 $CF $INC -DFW_VERSION='"host"' tools/screens/render.cpp src/seg7.cpp "$B"/accel_core.o "$B"/acc_hist.o \
+cc -c $CF $INC src/font_pl.c -o "$B/font_pl.o"
+c++ -std=c++17 $CF $INC -DFW_VERSION='"host"' tools/screens/render.cpp src/seg7.cpp "$B/font_pl.o" "$B"/accel_core.o "$B"/acc_hist.o \
   "$B"/nav_core.o "$B"/odo_core.o "$B"/cyd_calib_ui.o "$B"/touch_cal.o "$B"/cyd_rot.o "$B/liblvgl.a" -o "$B/render"
 "$B/render" "$OUT"
 for p in "$OUT"/*.ppm; do sips -s format png "$p" --out "${p%.ppm}.png" >/dev/null && rm "$p"; done

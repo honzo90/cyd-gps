@@ -21,7 +21,7 @@ while standing, position jumps (implied speed > 2 x receiver speed + 15 km/h) sk
 
 ## Screens (bottom bar or swipe left/right)
 
-The screens show plain words only (accuracy "dobra", local time, "Sygnal GPS: dobry"); "Tryb dewelopera"
+The screens show plain words only (accuracy "dobra", local time, "Sygnał GPS: dobry") with Polish letters (src/font_pl.c: Montserrat + ąćęłńóśźż, composed by tools/fonts/make_pl_fonts.py from the LVGL fonts); "Tryb dewelopera"
 on the web page (card "Ekran CYD", saved in NVS) brings back HDOP, signal levels, GPS rate, GPX file,
 version and NTP.
 
