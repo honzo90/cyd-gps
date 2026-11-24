@@ -73,7 +73,7 @@ Bez internetu mapa w „Przejazdach” się nie wczyta — strona pokazuje wtedy
 | `D nazwa.gpx` | usunięcie pliku GPX (nie tego, który jest właśnie zapisywany) |
 | `T` | wyzerowanie całego licznika (trip i całkowity) |
 | `R` | obrót ekranu o 90° |
-| `B` | dziennik restartów: liczba uruchomień i przyczyny 8 ostatnich |
+| `B` | dziennik restartów: liczba uruchomień, przyczyny 8 ostatnich, czas pracy przed każdym, zadanie przy watchdogu |
 
 ## Dziennik restartów — jak czytać
 
@@ -94,6 +94,10 @@ CYD) — warto pamiętać, ile razy włączało się go samemu.
 - **Restarty na powerbanku.** Dziennik pokazał wyłącznie „zasilanie wł.” — CYD traci prąd, firmware
   się nie wywraca. Do sprawdzenia: poruszanie wtykiem USB-C w gnieździe CYD (czy resetuje), inny
   krótki kabel, inny powerbank lub jego tryb niskiego prądu. Potem znów odczytać dziennik (`B`).
+- **Zawieszenia (watchdog zadania).** 23–24.11 CYD kilka razy zrestartował się przez watchdog
+  (firmware zablokował pierwszy rdzeń na > 5 s); przyczyna nieznana, 20 min nasłuchu nic nie
+  pokazało. Od 1.0.16 dziennik zapisuje nazwę zadania i czas pracy przed restartem — przy
+  następnym razie odczytać `B` / stronę i poprawić wskazane miejsce.
 - **Pierwszy prawdziwy pomiar** na ekranie POMIAR (na zamkniętym placu) — sprawdzony dotąd tylko
   testami i symulacją.
 - **Kierunek jazdy** — sprawdzony w symulacji, jeszcze nie w prawdziwym ruchu.
