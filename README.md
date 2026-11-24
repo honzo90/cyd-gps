@@ -86,6 +86,7 @@ GitHub Actions (`.github/workflows/release.yml`) builds the tag and creates the 
 pio run -e cyd2usb -t upload     # flash over USB
 pio run -e cyd2usb_sim -t upload # synthetic GPS data (no NVS writes)
 sh test/host/run.sh              # host tests for the odometer and GPX logic
+sh tools/screens/render.sh       # PNG of every screen (both orientations) rendered on the Mac -> .pio/screens
 ```
 
 USB serial commands (115200): `n` toggles the raw NMEA echo, `T` zeroes the whole odometer,

@@ -22,7 +22,71 @@
 #include "nav_core.h"
 #include <math.h>
 
-static const uint32_t k_bg = 0x101418, k_caption = 0x7F8A94, k_dim = 0x5A646E;
+// ---- look: one palette, shared styles (a style shared by many objects costs no LVGL heap per object)
+static const uint32_t k_bg = 0x0E1216;       // screen
+static const uint32_t k_surface = 0x182029;  // cards
+static const uint32_t k_raised = 0x26303B;   // buttons
+static const uint32_t k_pressed = 0x37434F;
+static const uint32_t k_text = 0xF2F5F7;     // values
+static const uint32_t k_text2 = 0xC5CDD4;    // longer text
+static const uint32_t k_caption = 0x8C97A1;  // captions (>= 4.5:1 on the cards)
+static const uint32_t k_dim = 0x6B7680;      // hints only
+static const uint32_t k_accent = 0xFF7A1A;   // running clock, records
+static const uint32_t k_ok = 0x4CD97B, k_warn = 0xFFC145, k_err = 0xFF5A5A;
+
+static lv_style_t s_st_card, s_st_btn, s_st_btn_pr, s_st_pill;
+
+static void styles_init()
+{
+    static bool done;
+    if (done) {
+        return;
+    }
+    done = true;
+    lv_style_init(&s_st_card);
+    lv_style_set_bg_color(&s_st_card, lv_color_hex(k_surface));
+    lv_style_set_bg_opa(&s_st_card, LV_OPA_COVER);
+    lv_style_set_radius(&s_st_card, 10);
+    lv_style_init(&s_st_btn);
+    lv_style_set_bg_color(&s_st_btn, lv_color_hex(k_raised));
+    lv_style_set_radius(&s_st_btn, 10);
+    lv_style_set_shadow_width(&s_st_btn, 0);
+    lv_style_set_text_color(&s_st_btn, lv_color_hex(k_text));
+    lv_style_init(&s_st_btn_pr);
+    lv_style_set_bg_color(&s_st_btn_pr, lv_color_hex(k_pressed));
+    lv_style_set_translate_y(&s_st_btn_pr, 1);
+    lv_style_init(&s_st_pill);
+    lv_style_set_radius(&s_st_pill, LV_RADIUS_CIRCLE);
+    lv_style_set_bg_opa(&s_st_pill, LV_OPA_COVER);
+    lv_style_set_pad_hor(&s_st_pill, 10);
+    lv_style_set_pad_ver(&s_st_pill, 3);
+}
+
+// Rounded surface behind a group of values. Created before them, so it is drawn under them.
+static lv_obj_t *make_card(lv_obj_t *parent, int x, int y, int w, int h)
+{
+    lv_obj_t *c = lv_obj_create(parent);
+    lv_obj_remove_style_all(c);
+    lv_obj_add_style(c, &s_st_card, 0);
+    lv_obj_set_pos(c, x, y);
+    lv_obj_set_size(c, w, h);
+    lv_obj_remove_flag(c, (lv_obj_flag_t)(LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE));
+    return c;
+}
+
+// Every button: same shape, same pressed state. The label is child 0.
+static lv_obj_t *make_button(lv_obj_t *parent, const char *text, int w, int h)
+{
+    lv_obj_t *b = lv_button_create(parent);
+    lv_obj_add_style(b, &s_st_btn, 0);
+    lv_obj_add_style(b, &s_st_btn_pr, LV_STATE_PRESSED);
+    lv_obj_set_size(b, w, h);
+    lv_obj_t *l = lv_label_create(b);
+    lv_label_set_text(l, text);
+    lv_obj_center(l);
+    return b;
+}
+
 
 // Layout of the current rotation (see cyd_set_rotation): 320 x 240 or 240 x 320.
 static int s_w = 320, s_h = 240;
@@ -69,26 +133,49 @@ static lv_obj_t *make_value(lv_obj_t *parent, const char *caption, int col, int 
 {
     const int x = 12 + col * (s_port ? 114 : 154), y = y0 + row * 44;
     make_label(parent, &lv_font_montserrat_14, k_caption, x, y, caption);
-    return make_label(parent, &lv_font_montserrat_20, 0xFFFFFF, x, y + 16, "--");
+    return make_label(parent, &lv_font_montserrat_20, k_text, x, y + 16, "--");
 }
 
-// Fix status at the top right; in portrait on its own line (the title fills the narrow width).
-static lv_obj_t *make_status(lv_obj_t *t)
+// Title with dim swipe hints: "< POMIAR >" (left/right: neighbour screens exist). Returns the title.
+static lv_obj_t *make_header(lv_obj_t *t, const char *title, bool left, bool right)
 {
-    lv_obj_t *l = make_label(t, &lv_font_montserrat_20, 0xFFFFFF, 0, 0, "");
-    if (s_port) {
-        lv_obj_set_pos(l, 12, 34);
-    } else {
-        lv_obj_align(l, LV_ALIGN_TOP_RIGHT, -12, 8);
+    int x = 10;
+    if (left) {
+        make_label(t, &lv_font_montserrat_14, k_dim, x, 12, LV_SYMBOL_LEFT);
+        x += 18;
+    }
+    lv_obj_t *l = make_label(t, &lv_font_montserrat_20, k_text, x, 8, title);
+    if (right) {
+        lv_obj_t *r = make_label(t, &lv_font_montserrat_14, k_dim, 0, 0, LV_SYMBOL_RIGHT);
+        lv_obj_align_to(r, l, LV_ALIGN_OUT_RIGHT_MID, 8, 1);
     }
     return l;
+}
+
+// Status pill at the top right; in portrait on its own line (the title fills the narrow width).
+static lv_obj_t *make_status(lv_obj_t *t)
+{
+    lv_obj_t *l = make_label(t, &lv_font_montserrat_14, k_text, 0, 0, "");
+    lv_obj_add_style(l, &s_st_pill, 0);
+    if (s_port) {
+        lv_obj_set_pos(l, 10, 36);
+    } else {
+        lv_obj_align(l, LV_ALIGN_TOP_RIGHT, -10, 10);
+    }
+    return l;
+}
+
+static void set_pill(lv_obj_t *o, const char *text, uint32_t color)
+{
+    lv_label_set_text(o, text);
+    lv_obj_set_style_text_color(o, lv_color_hex(color), 0);
+    lv_obj_set_style_bg_color(o, lv_color_mix(lv_color_hex(color), lv_color_hex(k_bg), 56), 0);  // ~22 % tint
 }
 
 static void set_status(const char *text, uint32_t color, bool r, bool g)
 {
     for (lv_obj_t *o : {s_status, s_odo_status, s_spd_status}) {
-        lv_label_set_text(o, text);
-        lv_obj_set_style_text_color(o, lv_color_hex(color), 0);
+        set_pill(o, text, color);
     }
     cyd_led(r, g, false);
 }
@@ -134,7 +221,7 @@ static void refresh_gps(const gps_data_t &g)
                               (unsigned long)g.chars, (unsigned long)g.bad_sum);
     } else {
         // Signal: received/in view, count >= 30 dB-Hz, mean of the 4 strongest, max.
-        lv_label_set_text_fmt(s_diag, "Sygnal: odb %u/%u  >=30dB: %u  top4 %u  %.0f Hz", g.sat_tracked,
+        lv_label_set_text_fmt(s_diag, "Odb. %u/%u  >=30 dB: %u  top4: %u  %.0f Hz", g.sat_tracked,
                               g.sat_view, g.sat_strong, g.snr_top4, g.rate_hz);
     }
 }
@@ -314,13 +401,13 @@ static void refresh(lv_timer_t *)
     gps_data_t g;
     gps_get(&g);
     if (g.chars == 0) {
-        set_status("BRAK DANYCH", 0xFF5A5A, true, false);
+        set_status("BRAK DANYCH", k_err, true, false);
     } else if (!g.baud_locked) {
-        set_status("SZUKAM BAUD", 0xFF5A5A, true, false);
+        set_status("SZUKAM BAUD", k_err, true, false);
     } else if (!g.fix) {
-        set_status("SZUKAM FIX...", 0xFFC145, true, true);
+        set_status("SZUKAM FIX", k_warn, true, true);
     } else {
-        set_status("FIX", 0x4CD97B, false, true);
+        set_status("FIX", k_ok, false, true);
     }
     refresh_gps(g);
     refresh_odo(g);
@@ -381,34 +468,37 @@ static void refresh_accel(lv_timer_t *)
     uint32_t col;
     if (!a.sample_ok) {
         st = "BRAK FIX";
-        col = 0xFF5A5A;
+        col = k_err;
     } else if (a.rate_hz > 0 && a.rate_hz < 5) {
         st = "GPS 1 Hz";
-        col = 0xFFC145;
+        col = k_warn;
     } else if (a.phase == ACC_RUNNING) {
         st = "POMIAR";
-        col = 0xFF7A1A;
+        col = k_accent;
     } else if (a.phase == ACC_ARMED) {
         st = "GOTOWY";
-        col = 0x4CD97B;
+        col = k_ok;
     } else {
-        st = "ZATRZYMAJ SIE";
-        col = 0x9AA4AE;
+        st = "ZATRZYMAJ";  // stand still 1 s to arm
+        col = k_text2;
     }
-    lv_label_set_text(s_acc_status, st);
-    lv_obj_set_style_text_color(s_acc_status, lv_color_hex(col), 0);
+    set_pill(s_acc_status, st, col);
 
     char b[24];
     fmt_time(b, sizeof b, a.phase == ACC_RUNNING || a.has_last ? a.elapsed_s : 0);
     lv_label_set_text(s_acc_clock, b);
-    lv_obj_set_style_text_color(s_acc_clock, lv_color_hex(a.phase == ACC_RUNNING ? 0xFF7A1A : 0xFFFFFF), 0);
+    lv_obj_set_style_text_color(s_acc_clock, lv_color_hex(a.phase == ACC_RUNNING ? k_accent : k_text), 0);
     lv_label_set_text_fmt(s_acc_speed, "%d km/h %.0fHz", (int)(g.spd_kmh + 0.5f), a.rate_hz);
 
     for (int i = 0; i < ACC_N; ++i) {
         fmt_time(b, sizeof b, a.has_last ? a.last.t[i] : -1);
         lv_label_set_text(s_acc_val[i], b);
+        // this run set the record: the value in the accent colour
+        const bool record = a.has_last && a.phase != ACC_RUNNING && a.last.t[i] > 0 && a.best[i] > 0 &&
+                            fabsf(a.last.t[i] - a.best[i]) < 0.005f;
+        lv_obj_set_style_text_color(s_acc_val[i], lv_color_hex(record ? k_accent : k_text), 0);
         if (a.best[i] > 0) {
-            lv_label_set_text_fmt(s_acc_best[i], "naj. %.2f", a.best[i]);
+            lv_label_set_text_fmt(s_acc_best[i], s_port ? "%.2f" : "naj. %.2f", a.best[i]);
         } else {
             lv_label_set_text(s_acc_best[i], "");
         }
@@ -611,47 +701,51 @@ static void on_acc_reset(lv_event_t *)
 
 static void build_accel_screen(lv_obj_t *t)
 {
-    lv_obj_t *title = make_label(t, &lv_font_montserrat_20, 0xFFFFFF, 12, 8, LV_SYMBOL_LEFT "  POMIAR  " LV_SYMBOL_RIGHT);
+    lv_obj_t *title = make_header(t, "POMIAR", true, true);
     // long press on the title clears the best times (rare, so no extra button)
     lv_obj_add_flag(title, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_event_cb(title, on_acc_reset, LV_EVENT_LONG_PRESSED, NULL);
     s_acc_status = make_status(t);
 
-    s_acc_clock = make_label(t, &lv_font_montserrat_32, 0xFFFFFF, 12, 38 + dy(), "0.00 s");
-    s_acc_speed = make_label(t, &lv_font_montserrat_14, k_caption, s_port ? 12 : 122, s_port ? 100 : 52, "");
+    s_acc_clock = make_label(t, &lv_font_montserrat_32, k_text, 12, 38 + dy(), "0.00 s");
+    s_acc_speed = make_label(t, &lv_font_montserrat_14, k_caption, s_port ? 12 : 116, s_port ? 100 : 52, "");
 
     // Two icon buttons top right: list of the last runs, and restart (drop the current run or the
     // last result, then stand 1 s and go again).
     for (int b = 0; b < 2; ++b) {
-        lv_obj_t *btn = lv_button_create(t);
-        lv_obj_set_size(btn, 46, 34);
+        lv_obj_t *btn = make_button(t, b ? LV_SYMBOL_REFRESH : LV_SYMBOL_LIST, 46, 34);
         lv_obj_align(btn, LV_ALIGN_TOP_RIGHT, (s_port ? -8 : -10) - (b ? 0 : 50), s_port ? 64 : 40);
-        lv_obj_set_style_bg_color(btn, lv_color_hex(0x2A3138), 0);
-        lv_obj_set_style_bg_color(btn, lv_color_hex(b ? 0x8A2E2E : 0x3A4550), LV_STATE_PRESSED);
-        lv_obj_t *l = lv_label_create(btn);
-        lv_label_set_text(l, b ? LV_SYMBOL_REFRESH : LV_SYMBOL_LIST);
+        lv_obj_t *l = lv_obj_get_child(btn, 0);
         lv_obj_set_style_text_font(l, &lv_font_montserrat_20, 0);
-        lv_obj_center(l);
         lv_obj_add_event_cb(btn, b ? on_acc_restart : on_runs_open, LV_EVENT_CLICKED, NULL);
         if (b) {
             s_acc_rst_icon = l;
         }
     }
 
+    // the results table on one card
+    if (s_port) {
+        make_card(t, 6, 112, s_w - 12, 24 + ACC_N * 28);
+        lv_obj_t *h = make_label(t, &lv_font_montserrat_14, k_dim, 0, 116, "naj.");
+        lv_obj_align(h, LV_ALIGN_TOP_RIGHT, -14, 116);
+    } else {
+        make_card(t, 6, 77, s_w - 12, ACC_N * 22 + 6);
+    }
     for (int i = 0; i < ACC_N; ++i) {
         if (s_port) {  // name with the best time under it, value on the right
-            const int y = 120 + i * 30;
-            make_label(t, &lv_font_montserrat_14, k_caption, 12, y, k_acc_names[i]);
-            s_acc_best[i] = make_label(t, &lv_font_montserrat_14, k_dim, 12, y + 15, "");
-            s_acc_val[i] = make_label(t, &lv_font_montserrat_20, 0xFFFFFF, 132, y + 4, "--");
+            const int y = 134 + i * 28;
+            make_label(t, &lv_font_montserrat_14, k_caption, 12, y + 4, k_acc_names[i]);
+            s_acc_val[i] = make_label(t, &lv_font_montserrat_20, k_text, 112, y, "--");
+            s_acc_best[i] = make_label(t, &lv_font_montserrat_14, k_caption, 0, y + 4, "");
+            lv_obj_align(s_acc_best[i], LV_ALIGN_TOP_RIGHT, -14, y + 4);
         } else {
             const int y = 80 + i * 22;
             make_label(t, &lv_font_montserrat_14, k_caption, 12, y + 4, k_acc_names[i]);
-            s_acc_val[i] = make_label(t, &lv_font_montserrat_20, 0xFFFFFF, 118, y, "--");
-            s_acc_best[i] = make_label(t, &lv_font_montserrat_14, k_dim, 224, y + 4, "");
+            s_acc_val[i] = make_label(t, &lv_font_montserrat_20, k_text, 118, y, "--");
+            s_acc_best[i] = make_label(t, &lv_font_montserrat_14, k_caption, 224, y + 4, "");
         }
     }
-    s_acc_note = make_label(t, &lv_font_montserrat_14, 0x9AA4AE, 0, 0, "");
+    s_acc_note = make_label(t, &lv_font_montserrat_14, k_caption, 0, 0, "");
     lv_obj_set_width(s_acc_note, s_w - 16);
     lv_label_set_long_mode(s_acc_note, LV_LABEL_LONG_DOT);  // one line, also in portrait
     lv_obj_set_style_text_align(s_acc_note, LV_TEXT_ALIGN_CENTER, 0);
@@ -665,7 +759,7 @@ static void build_accel_screen(lv_obj_t *t)
 
 static void build_speedo_screen(lv_obj_t *t)
 {
-    make_label(t, &lv_font_montserrat_20, 0xFFFFFF, 12, 8, "PREDKOSC  " LV_SYMBOL_RIGHT);
+    make_header(t, "PREDKOSC", false, true);
     s_spd_status = make_status(t);
 
     // Landscape: 3 digits of 76 x 128 px, 16 px stroke: 3*76 + 2*14 = 256 px wide, centred.
@@ -678,15 +772,15 @@ static void build_speedo_screen(lv_obj_t *t)
     }
     const int y_scale = s_port ? 200 : 170;  // row under the digits: scale, (direction,) unit
 
-    lv_obj_t *unit = make_label(t, &lv_font_montserrat_20, 0x7F8A94, 0, 0, "km/h");
+    lv_obj_t *unit = make_label(t, &lv_font_montserrat_20, k_caption, 0, 0, "km/h");
     lv_obj_align(unit, LV_ALIGN_TOP_RIGHT, -mx, y_scale);
-    s_spd_scale = make_label(t, &lv_font_montserrat_14, 0x5A646E, mx, y_scale + 4, "");
+    s_spd_scale = make_label(t, &lv_font_montserrat_14, k_dim, mx, y_scale + 4, "");
 
     s_spd_bar = lv_bar_create(t);
     lv_obj_set_size(s_spd_bar, dw, 10);
     lv_obj_set_pos(s_spd_bar, mx, y_scale + 26);
-    lv_obj_set_style_bg_color(s_spd_bar, lv_color_hex(0x1A2026), 0);
-    lv_obj_set_style_bg_color(s_spd_bar, lv_color_hex(0x4CD97B), LV_PART_INDICATOR);
+    lv_obj_set_style_bg_color(s_spd_bar, lv_color_hex(k_surface), 0);
+    lv_obj_set_style_bg_color(s_spd_bar, lv_color_hex(k_ok), LV_PART_INDICATOR);
     lv_obj_remove_flag(s_spd_bar, LV_OBJ_FLAG_CLICKABLE);
 
     // direction of travel (GPS course, shown from 5 km/h): arrow + "NE 47°" between scale and unit
@@ -695,13 +789,13 @@ static void build_speedo_screen(lv_obj_t *t)
     // landscape: between scale and unit; portrait: own row under the bar
     lv_obj_set_pos(s_dir_arrow, s_port ? 72 : 112, s_port ? 252 : 167);
     lv_obj_set_style_line_width(s_dir_arrow, 3, 0);
-    lv_obj_set_style_line_color(s_dir_arrow, lv_color_hex(0x4CD97B), 0);
+    lv_obj_set_style_line_color(s_dir_arrow, lv_color_hex(k_ok), 0);
     lv_obj_set_style_line_rounded(s_dir_arrow, true, 0);
     set_arrow(0);
     lv_obj_add_flag(s_dir_arrow, LV_OBJ_FLAG_HIDDEN);
-    s_dir_text = make_label(t, &lv_font_montserrat_20, 0xFFFFFF, s_port ? 102 : 142, s_port ? 253 : 168, "--");
+    s_dir_text = make_label(t, &lv_font_montserrat_20, k_text, s_port ? 102 : 142, s_port ? 253 : 168, "--");
 
-    s_spd_info = make_label(t, &lv_font_montserrat_14, 0x9AA4AE, 0, 0, "");
+    s_spd_info = make_label(t, &lv_font_montserrat_14, k_caption, 0, 0, "");
     lv_obj_align(s_spd_info, LV_ALIGN_BOTTOM_MID, 0, -8);
 }
 
@@ -839,73 +933,54 @@ static void on_gh_check(lv_event_t *)
 
 static void build_wifi_screen(lv_obj_t *t)
 {
-    make_label(t, &lv_font_montserrat_20, 0xFFFFFF, 12, 8, LV_SYMBOL_LEFT "  WI-FI");
-    s_wifi_info = make_label(t, &lv_font_montserrat_14, 0xE8ECEF, 12, 42, "");
+    make_header(t, "WI-FI", true, false);
+    // the card clips the text: a long hotspot description never runs under the buttons
+    lv_obj_t *card = make_card(t, 6, 40, s_w - 12, s_port ? 196 : 152);
+    s_wifi_info = make_label(card, &lv_font_montserrat_14, k_text2, 8, 6, "");
 
     // QR login: long press, so the password and code are not shown by a stray touch.
-    lv_obj_t *qr = lv_button_create(t);
-    lv_obj_set_size(qr, 56, 30);
-    lv_obj_align(qr, LV_ALIGN_TOP_RIGHT, -8, 6);
-    lv_obj_set_style_bg_color(qr, lv_color_hex(0x2A3138), 0);
-    lv_obj_t *ql = lv_label_create(qr);
-    lv_label_set_text(ql, "QR");
-    lv_obj_center(ql);
+    lv_obj_t *qr = make_button(t, "QR", 56, 30);
+    lv_obj_align(qr, LV_ALIGN_TOP_RIGHT, -8, 5);
     lv_obj_add_event_cb(qr, on_qr_open, LV_EVENT_LONG_PRESSED, NULL);
 
     // Rotate the screen by 90 degrees per tap (remembered; also on the web page).
-    lv_obj_t *rot = lv_button_create(t);
-    lv_obj_set_size(rot, 56, 30);
-    lv_obj_align(rot, LV_ALIGN_TOP_RIGHT, -70, 6);
-    lv_obj_set_style_bg_color(rot, lv_color_hex(0x2A3138), 0);
-    lv_obj_t *rl = lv_label_create(rot);
-    lv_label_set_text(rl, LV_SYMBOL_REFRESH);
-    lv_obj_center(rl);
+    lv_obj_t *rot = make_button(t, LV_SYMBOL_REFRESH, 56, 30);
+    lv_obj_align(rot, LV_ALIGN_TOP_RIGHT, -70, 5);
     lv_obj_add_event_cb(rot, on_rotate, LV_EVENT_CLICKED, NULL);
 
-    lv_obj_set_width(s_wifi_info, s_w - 24);
+    lv_obj_set_width(s_wifi_info, s_w - 12 - 16);
     lv_obj_set_style_text_line_space(s_wifi_info, s_port ? 2 : 6, 0);
-    if (s_port) {  // never under the two stacked buttons (they start at y 240)
-        lv_obj_set_height(s_wifi_info, 240 - 4 - 42);
-        lv_label_set_long_mode(s_wifi_info, LV_LABEL_LONG_CLIP);
-    }
     // Buttons: landscape side by side; portrait full width, update above Wi-Fi on/off.
     const int bw_upd = s_port ? s_w - 16 : 160, bw_wifi = s_port ? s_w - 16 : 140;
 
     // Install from GitHub: long press, so a stray touch while driving cannot start it.
-    s_gh_btn = lv_button_create(t);
-    lv_obj_set_size(s_gh_btn, bw_upd, 34);
+    s_gh_btn = make_button(t, "", bw_upd, 34);
     lv_obj_align(s_gh_btn, LV_ALIGN_BOTTOM_LEFT, 8, s_port ? -46 : -6);
     lv_obj_set_style_bg_color(s_gh_btn, lv_color_hex(0x1F5A36), 0);
-    s_gh_btn_label = lv_label_create(s_gh_btn);
-    lv_obj_center(s_gh_btn_label);
+    s_gh_btn_label = lv_obj_get_child(s_gh_btn, 0);
     lv_obj_add_event_cb(s_gh_btn, on_gh_install, LV_EVENT_LONG_PRESSED, NULL);
     lv_obj_add_flag(s_gh_btn, LV_OBJ_FLAG_HIDDEN);
 
     // Check for updates: a plain click (it only asks GitHub, installs nothing).
-    s_chk_btn = lv_button_create(t);
-    lv_obj_set_size(s_chk_btn, bw_upd, 34);
+    s_chk_btn = make_button(t, "", bw_upd, 34);
     lv_obj_align(s_chk_btn, LV_ALIGN_BOTTOM_LEFT, 8, s_port ? -46 : -6);
-    lv_obj_set_style_bg_color(s_chk_btn, lv_color_hex(0x2A3138), 0);
-    s_chk_btn_label = lv_label_create(s_chk_btn);
-    lv_obj_center(s_chk_btn_label);
+    s_chk_btn_label = lv_obj_get_child(s_chk_btn, 0);
     lv_obj_add_event_cb(s_chk_btn, on_gh_check, LV_EVENT_CLICKED, NULL);
     lv_obj_add_flag(s_chk_btn, LV_OBJ_FLAG_HIDDEN);
 
-    lv_obj_t *btn = lv_button_create(t);
-    lv_obj_set_size(btn, bw_wifi, 34);
+    lv_obj_t *btn = make_button(t, "", bw_wifi, 34);
     lv_obj_align(btn, LV_ALIGN_BOTTOM_RIGHT, -8, -6);
-    lv_obj_set_style_bg_color(btn, lv_color_hex(0x2A3138), 0);
-    s_wifi_btn_label = lv_label_create(btn);
-    lv_obj_center(s_wifi_btn_label);
+    s_wifi_btn_label = lv_obj_get_child(btn, 0);
     lv_obj_add_event_cb(btn, on_wifi_toggle, LV_EVENT_CLICKED, NULL);
 }
 
 static void build_gps_screen(lv_obj_t *t)
 {
-    make_label(t, &lv_font_montserrat_20, 0xFFFFFF, 12, 8, LV_SYMBOL_LEFT "  GPS  " LV_SYMBOL_RIGHT);
+    make_header(t, "GPS", true, true);
     s_status = make_status(t);
     // portrait: latitude and longitude need a full row each, the rest is shifted down by one row
-    const int y0 = 36 + dy(), r = s_port ? 1 : 0;
+    const int y0 = 38 + dy(), r = s_port ? 1 : 0;
+    make_card(t, 6, y0 - 4, s_w - 12, (4 + r) * 44 - 2);
     s_lat = make_value(t, "Szerokosc", 0, 0, y0);
     s_lon = make_value(t, "Dlugosc", s_port ? 0 : 1, r, y0);
     s_alt = make_value(t, "Wysokosc", 0, 1 + r, y0);
@@ -922,35 +997,34 @@ static void build_gps_screen(lv_obj_t *t)
 
 static void build_odo_screen(lv_obj_t *t)
 {
-    make_label(t, &lv_font_montserrat_20, 0xFFFFFF, 12, 8, LV_SYMBOL_LEFT "  LICZNIK  " LV_SYMBOL_RIGHT);
+    make_header(t, "LICZNIK", true, true);
     s_odo_status = make_status(t);
 
     make_label(t, &lv_font_montserrat_14, k_caption, 12, 38 + dy(), "Trip");
-    s_trip = make_label(t, &lv_font_montserrat_32, 0xFFFFFF, 12, 54 + dy(), "--");
+    s_trip = make_label(t, &lv_font_montserrat_32, k_text, 12, 54 + dy(), "--");
     // total: right of the trip in landscape, under it in portrait
     make_label(t, &lv_font_montserrat_14, k_caption, s_port ? 12 : 166, s_port ? 118 : 38, "Calkowity");
-    s_total = make_label(t, &lv_font_montserrat_20, 0xFFFFFF, s_port ? 12 : 166, s_port ? 134 : 58, "--");
+    s_total = make_label(t, &lv_font_montserrat_20, k_text, s_port ? 12 : 166, s_port ? 134 : 58, "--");
 
     const int y0 = s_port ? 166 : 98;
+    make_card(t, 6, y0 - 4, s_w - 12, 2 * 44 - 2);
     s_max = make_value(t, "Maks. predkosc", 0, 0, y0);
-    s_avg = make_value(t, s_port ? "Srednia w ruchu" : "Srednia (w ruchu)", 1, 0, y0);
+    s_avg = make_value(t, s_port ? "Sr. w ruchu" : "Srednia (w ruchu)", 1, 0, y0);
     s_moving = make_value(t, "Czas jazdy", 0, 1, y0);
     s_now = make_value(t, "Predkosc", 1, 1, y0);
 
     s_sd = make_label(t, &lv_font_montserrat_14, k_dim, 0, 0, "");
-    lv_obj_align(s_sd, LV_ALIGN_BOTTOM_MID, 0, -44);
+    lv_obj_set_width(s_sd, s_w - 16);
+    lv_label_set_long_mode(s_sd, LV_LABEL_LONG_DOT);
+    lv_obj_set_style_text_align(s_sd, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(s_sd, LV_ALIGN_BOTTOM_MID, 0, -45);
 
-    lv_obj_t *btn = lv_button_create(t);
-    lv_obj_set_size(btn, 220, 34);
+    lv_obj_t *btn = make_button(t, "Zeruj trip (przytrzymaj)", 220, 34);
     lv_obj_align(btn, LV_ALIGN_BOTTOM_MID, 0, -6);
-    lv_obj_set_style_bg_color(btn, lv_color_hex(0x2A3138), 0);
-    lv_obj_set_style_bg_color(btn, lv_color_hex(0x8A2E2E), LV_STATE_PRESSED);
-    lv_obj_t *bl = lv_label_create(btn);
-    lv_label_set_text(bl, "Zeruj trip (przytrzymaj)");
-    lv_obj_center(bl);
+    lv_obj_set_style_bg_color(btn, lv_color_hex(0x8A2E2E), LV_STATE_PRESSED);  // destructive
     lv_obj_add_event_cb(btn, on_reset_trip, LV_EVENT_LONG_PRESSED, NULL);
 
-    s_reset_note = make_label(t, &lv_font_montserrat_20, 0x4CD97B, 0, 0, "Trip wyzerowany");
+    s_reset_note = make_label(t, &lv_font_montserrat_20, k_ok, 0, 0, "Trip wyzerowany");
     lv_obj_align(s_reset_note, LV_ALIGN_CENTER, 0, 20);
     lv_obj_add_flag(s_reset_note, LV_OBJ_FLAG_HIDDEN);
 }
@@ -960,6 +1034,7 @@ static lv_obj_t *s_tv;
 
 static void build_ui()
 {
+    styles_init();
     lv_display_t *d = lv_display_get_default();
     s_w = lv_display_get_horizontal_resolution(d);
     s_h = lv_display_get_vertical_resolution(d);
