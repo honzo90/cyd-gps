@@ -195,7 +195,10 @@ static void task(void *)
 void gh_ota_begin()
 {
     // TLS handshake + HTTP: mbedTLS takes most of its memory from the heap, the rest is stack.
-    xTaskCreatePinnedToCore(task, "gh_ota", 10240, NULL, 1, &s_task, 0);
+    // Priority 0 = the idle task's: a handshake computes for seconds without blocking, and at
+    // priority 1 it starved IDLE0 for > 5 s, so the task watchdog reset the CYD ~40 s after every
+    // start in the home network (restart log: "CPU0 gh_ota"). Equal priorities share the CPU.
+    xTaskCreatePinnedToCore(task, "gh_ota", 10240, NULL, tskIDLE_PRIORITY, &s_task, 0);
 }
 
 void gh_ota_check_now()
