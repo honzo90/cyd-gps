@@ -39,14 +39,17 @@ Po wydaniu CYD w sieci domowej sam znajdzie nową wersję (co 6 h albo przycisk 
 aktualizacje” na ekranie WI-FI); instalacja przytrzymaniem przycisku „Instaluj …”. Jeśli nowa wersja
 nie uruchomi sieci w 15 s, CYD wraca do poprzedniej.
 
-## Ekrany CYD (przesuwanie w lewo/prawo)
+## Ekrany CYD (dolny pasek albo przesuwanie w lewo/prawo)
+
+Pasek na dole przełącza ekrany (aktywny ma nazwę). Ikona GPS w pasku: zielona = fix, żółta = szuka,
+czerwona = brak danych z modułu.
 
 1. **Prędkościomierz** — duże cyfry, pasek, kierunek jazdy (strzałka + N/NE/E…, od 5 km/h; moduł
    nie ma kompasu, kierunek liczy GPS z ruchu).
 2. **POMIAR** — 0–50, 0–100, 0–200, 100–200 km/h, 100 m, 1/4 mili, plus nachylenie drogi
    (pod górę / z górki, z wysokości GPS, orientacyjnie ±1–2 %, od 50 m przejazdu; przy rekordach na
    stronie widać, na jakiej drodze padły). Stań na 1 s, ruszaj — czas startuje
-   sam. Przycisk ⟳ (restart) zeruje bieżący pomiar; przytrzymanie tytułu „POMIAR” kasuje najlepsze wyniki.
+   sam. Przycisk ⟳ (restart) zeruje bieżący pomiar; przytrzymanie dużego zegara kasuje najlepsze wyniki.
    GPS pracuje wtedy z częstotliwością 10 Hz. Tylko na zamkniętym torze lub placu.
    Każdy pomiar zapisuje się na kartę SD (`/runs/runs.csv` i przebieg prędkości `/runs/<id>.csv`).
    Na dole ekranu: liczba pomiarów i średnie 0–100; przycisk ≡ (obok ⟳ restartu) albo dotknięcie tej linii pokazuje listę ostatnich

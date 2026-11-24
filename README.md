@@ -19,7 +19,10 @@ Baud rate is detected automatically (115200 tried first). A micro-SD card (FAT32
 slot receives the GPX tracks: a point every 5 m while moving (receiver speed >= 3 km/h), nothing
 while standing, position jumps (implied speed > 2 x receiver speed + 15 km/h) skipped.
 
-## Screens (swipe left/right)
+## Screens (bottom bar or swipe left/right)
+
+A bar at the bottom switches screens (the active one shows its name; the GPS icon is green with a fix,
+yellow while searching, red without data). Swiping works as well.
 
 1. Speedometer (large seven-segment digits) with the direction of travel from the GPS course (arrow + N/NE/E..., from 5 km/h; no compass in the module)
 2. Acceleration timer (POMIAR): 0-50/100/200, 100-200 km/h, 100 m, 1/4 mile, road grade
@@ -37,7 +40,7 @@ to 10 Hz at every start (`$PCAS02,100` for AT6558 clones, UBX CFG-RATE for u-blo
 module), and the measured rate is shown. Stand still for 1 s, then drive off: the clock starts where
 the speed left 0 (interpolated between samples) and the run ends when the speed drops by 5 km/h.
 Crossing times are interpolated between samples (about +-0.05 s at 10 Hz). Best times are kept in NVS
-(not from runs at < 5 Hz or interrupted ones); long-press the "POMIAR" title to clear them. Logic in
+(not from runs at < 5 Hz or interrupted ones); long-press the clock to clear them. Logic in
 `lib/accel_core` (host tests). Use it on a closed track only.
 
 Run history: every finished run (also interrupted and 1 Hz ones, marked) is appended to

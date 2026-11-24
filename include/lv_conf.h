@@ -8,7 +8,8 @@
 #define LV_USE_LOG 0
 #define LV_FONT_MONTSERRAT_14 1
 #define LV_FONT_MONTSERRAT_20 1
-#define LV_FONT_MONTSERRAT_32 1  // trip distance
+#define LV_FONT_MONTSERRAT_32 1
+#define LV_FONT_MONTSERRAT_48 1  // hero numbers: POMIAR clock, trip (flash only, no RAM)
 #define LV_FONT_DEFAULT &lv_font_montserrat_14
 // lv_label_set_text_fmt with %f: LVGL's own printf has no floats ("naj. %.2f" showed "naj. f")
 #define LV_USE_STDLIB_SPRINTF LV_STDLIB_CLIB

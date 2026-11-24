@@ -232,6 +232,7 @@ int main(int argc, char **argv)
             for (int t = 0; t < 5; ++t) {
                 if (s_scene == 1 && t != 1) continue;  // the 2nd scene only matters for POMIAR
                 lv_tileview_set_tile_by_index(s_tv, t, 0, LV_ANIM_OFF);
+                nav_update();
                 settle();
                 char nm[64];
                 snprintf(nm, sizeof nm, "%s-%s%s", rot ? "pion" : "poziom", names[t], s_scene ? "-gotowy" : "");
