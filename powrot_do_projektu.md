@@ -49,7 +49,8 @@ nie uruchomi sieci w 15 s, CYD wraca do poprzedniej.
    sam. „Restart” zeruje bieżący pomiar; przytrzymanie tytułu „POMIAR” kasuje najlepsze wyniki.
    GPS pracuje wtedy z częstotliwością 10 Hz. Tylko na zamkniętym torze lub placu.
    Każdy pomiar zapisuje się na kartę SD (`/runs/runs.csv` i przebieg prędkości `/runs/<id>.csv`).
-   Na dole ekranu: liczba pomiarów i średnie 0–100. Na stronie, w sekcji „Pomiary”: historia,
+   Na dole ekranu: liczba pomiarów i średnie 0–100; dotknięcie tej linii pokazuje listę ostatnich
+   pomiarów (czas polski, 0–100, 1/4 mili, Vmax, nachylenie lub „przerw.”). Na stronie, w sekcji „Pomiary”: historia,
    podsumowanie (najlepszy, średni, rozrzut), wykres prędkości (zaznacz dwa, aby porównać),
    „Eksport CSV” (do Excela) i „Usuń historię” (najlepsze wyniki zostają).
 3. **Licznik** — trip, całkowity, maks., średnia, czas jazdy; przytrzymanie „Zeruj trip” zaczyna nowy

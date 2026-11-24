@@ -433,14 +433,125 @@ static void refresh_accel(lv_timer_t *)
         const float m = acc_stats_mean(&a.stats, ACC_T_0_100);
         if (m > 0) {
             char line[64];
-            snprintf(line, sizeof line, "Pomiary: %lu, sr. 0-100 %.2f s", (unsigned long)a.stats.runs, m);
+            snprintf(line, sizeof line, "Pomiary: %lu, sr. 0-100 %.2f s  " LV_SYMBOL_RIGHT, (unsigned long)a.stats.runs,
+                     m);
             lv_label_set_text(s_acc_note, line);
         } else {
-            lv_label_set_text_fmt(s_acc_note, "Pomiary: %lu", (unsigned long)a.stats.runs);
+            lv_label_set_text_fmt(s_acc_note, "Pomiary: %lu  " LV_SYMBOL_RIGHT, (unsigned long)a.stats.runs);
         }
     } else {
         lv_label_set_text(s_acc_note, "Tylko na zamknietym torze.");
     }
+}
+
+// ---- list of the last runs (overlay, built on tap, deleted on close: no RAM while hidden) ----
+static lv_obj_t *s_runs_panel;
+
+static void runs_close()
+{
+    if (s_runs_panel) {
+        lv_obj_delete_async(s_runs_panel);  // may be called from the panel's own event
+        s_runs_panel = NULL;
+    }
+}
+
+static void on_runs_close(lv_event_t *)
+{
+    runs_close();
+}
+
+static void on_runs_open(lv_event_t *)
+{
+    if (s_runs_panel) {
+        return;
+    }
+    static acc_hist_row_t rows[8];
+    const int max = s_port ? 8 : 6;
+    const int n = accel_recent(rows, max);
+    accel_view_t a;
+    accel_get(&a);
+
+    s_runs_panel = lv_obj_create(lv_layer_top());
+    lv_obj_remove_style_all(s_runs_panel);
+    lv_obj_set_size(s_runs_panel, s_w, s_h);
+    lv_obj_set_style_bg_color(s_runs_panel, lv_color_hex(k_bg), 0);
+    lv_obj_set_style_bg_opa(s_runs_panel, LV_OPA_COVER, 0);
+    lv_obj_add_flag(s_runs_panel, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_event_cb(s_runs_panel, on_runs_close, LV_EVENT_CLICKED, NULL);  // tap anywhere closes
+
+    make_label(s_runs_panel, &lv_font_montserrat_20, 0xFFFFFF, 12, 8, "Ostatnie pomiary");
+    if (!n) {
+        make_label(s_runs_panel, &lv_font_montserrat_14, 0x9AA4AE, 12, 48,
+                   gpx_log_sd_ok() ? "Brak zapisanych pomiarow." : "Brak karty SD.");
+    } else {
+        // columns: one label each, rows separated by '\n' (same line height keeps them aligned)
+        const int nc = s_port ? 4 : 5;
+        static const int xl[5] = {8, 100, 160, 222, 262}, xp[4] = {8, 98, 150, 200};
+        static const char *const head[5] = {"kiedy", "0-100 s", "1/4 mili", "Vmax", ""};
+        static char col[5][8 * 16 + 1];
+        for (int c = 0; c < nc; ++c) {
+            col[c][0] = 0;
+        }
+        for (int i = 0; i < n; ++i) {
+            const acc_hist_row_t &r = rows[i];
+            char cell[5][16];
+            acc_hist_when(r.id, cell[0], sizeof cell[0]);
+            for (int c = 1; c <= 2; ++c) {  // seconds are in the header
+                const float t = r.t[c == 1 ? ACC_T_0_100 : ACC_T_QUARTER];
+                snprintf(cell[c], sizeof cell[c], t > 0 ? "%.2f" : "--", t);
+            }
+            snprintf(cell[3], sizeof cell[3], "%.0f", r.vmax);
+            if (r.aborted) {
+                snprintf(cell[4], sizeof cell[4], s_port ? "prz." : "przerw.");
+            } else if (r.low_rate) {
+                snprintf(cell[4], sizeof cell[4], "1 Hz");
+            } else if (!isnan(r.grade_pct)) {
+                snprintf(cell[4], sizeof cell[4], "%+.0f%%", r.grade_pct);
+            } else {
+                cell[4][0] = 0;
+            }
+            if (s_port) {  // portrait: no Vmax, the note takes its place
+                memcpy(cell[3], cell[4], sizeof cell[3]);
+            }
+            for (int c = 0; c < nc; ++c) {
+                char *dst = col[c];
+                const size_t l = strlen(dst);
+                snprintf(dst + l, sizeof col[c] - l, "%s%s", i ? "\n" : "", cell[c]);
+            }
+        }
+        const int y0 = 40;
+        for (int c = 0; c < nc; ++c) {
+            const int x = s_port ? xp[c] : xl[c];
+            const char *h = s_port && c == 3 ? "" : head[c];
+            make_label(s_runs_panel, &lv_font_montserrat_14, k_caption, x, y0, h);
+            lv_obj_t *l = make_label(s_runs_panel, &lv_font_montserrat_14, c == 1 ? 0xFFFFFF : 0xC8D0D8, x, y0 + 20,
+                                     col[c]);
+            lv_obj_set_style_text_line_space(l, 2, 0);
+        }
+    }
+    // summary in two short lines left of / above the button: count + best, mean and spread of 0-100
+    char sum[96];
+    const float m = acc_stats_mean(&a.stats, ACC_T_0_100), sd = acc_stats_sd(&a.stats, ACC_T_0_100);
+    int k = snprintf(sum, sizeof sum, "Pomiary: %lu", (unsigned long)a.stats.runs);
+    if (a.best[ACC_T_0_100] > 0) {
+        k += snprintf(sum + k, sizeof sum - k, ", naj. %.2f s", a.best[ACC_T_0_100]);
+    }
+    if (m > 0) {
+        k += snprintf(sum + k, sizeof sum - k, "\nsr. 0-100 %.2f s", m);
+        if (sd >= 0) {
+            snprintf(sum + k, sizeof sum - k, " (+-%.2f)", sd);
+        }
+    }
+    lv_obj_t *sl = make_label(s_runs_panel, &lv_font_montserrat_14, 0x9AA4AE, 12, 0, sum);
+    lv_obj_align(sl, LV_ALIGN_BOTTOM_LEFT, 12, s_port ? -46 : -6);
+    lv_obj_t *close = lv_button_create(s_runs_panel);
+    lv_obj_set_size(close, 96, 34);
+    lv_obj_align(close, LV_ALIGN_BOTTOM_RIGHT, -8, -6);
+    lv_obj_set_style_bg_color(close, lv_color_hex(0x2A3138), 0);
+    lv_obj_t *cl = lv_label_create(close);
+    lv_label_set_text(cl, "Zamknij");
+    lv_obj_center(cl);
+    lv_obj_add_event_cb(close, on_runs_close, LV_EVENT_CLICKED, NULL);
 }
 
 static void on_acc_restart(lv_event_t *)
@@ -496,6 +607,9 @@ static void build_accel_screen(lv_obj_t *t)
     lv_label_set_long_mode(s_acc_note, LV_LABEL_LONG_DOT);  // one line, also in portrait
     lv_obj_set_style_text_align(s_acc_note, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_align(s_acc_note, LV_ALIGN_BOTTOM_MID, 0, s_port ? -2 : -4);
+    lv_obj_add_flag(s_acc_note, LV_OBJ_FLAG_CLICKABLE);  // tap: list of the last runs
+    lv_obj_set_ext_click_area(s_acc_note, 10);
+    lv_obj_add_event_cb(s_acc_note, on_runs_open, LV_EVENT_CLICKED, NULL);
     // 100 ms: the clock runs smoothly while the rest of the UI refreshes every 500 ms
     s_acc_timer = lv_timer_create(refresh_accel, 100, NULL);
 }
@@ -831,6 +945,10 @@ static void apply_rotation(uint8_t rot)
     lv_obj_t *tile = lv_tileview_get_tile_active(s_tv);
     const uint32_t idx = tile ? lv_obj_get_index(tile) : 0;
     qr_close();
+    if (s_runs_panel) {
+        lv_obj_delete(s_runs_panel);
+        s_runs_panel = NULL;
+    }
     lv_timer_delete(s_acc_timer);
     s_acc_timer = NULL;
     lv_obj_delete(s_tv);

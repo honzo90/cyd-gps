@@ -220,6 +220,24 @@ void accel_get(accel_view_t *v)
     v->stats = s_stats;
 }
 
+int accel_recent(acc_hist_row_t *rows, int max)
+{
+    if (!gpx_log_sd_ok()) {
+        return 0;
+    }
+    File f = SD.open("/runs/runs.csv", FILE_READ);
+    if (!f) {
+        return 0;
+    }
+    static char buf[1600];  // ~13 lines: enough for the 8 shown
+    const size_t size = f.size();
+    const size_t from = size > sizeof buf ? size - sizeof buf : 0;
+    f.seek(from);
+    const size_t len = f.read((uint8_t *)buf, sizeof buf);
+    f.close();
+    return acc_hist_tail(buf, len, from == 0, rows, max);
+}
+
 void accel_clear_history()
 {
     memset(&s_stats, 0, sizeof s_stats);

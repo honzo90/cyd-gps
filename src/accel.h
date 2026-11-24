@@ -26,3 +26,6 @@ void accel_restart();  // drop the current run / last result, wait for a new sta
 // Every finished run is appended to /runs/runs.csv on the SD card, its speed trace (10 Hz) goes to
 // /runs/<id>.csv. Clears both and the statistics (loop task only; the web page asks through main).
 void accel_clear_history();
+// The newest runs from /runs/runs.csv (newest first), for the list on the CYD; 0 without a card.
+// Reads the card: loop task only.
+int accel_recent(acc_hist_row_t *rows, int max);

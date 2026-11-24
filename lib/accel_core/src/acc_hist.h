@@ -26,6 +26,26 @@ bool acc_hist_valid_id(const char *id);
 // Runs that count for statistics and records: not interrupted, sampled at >= 5 Hz.
 bool acc_hist_counts(const acc_result_t *r);
 
+// One run read back from runs.csv (for the list on the CYD).
+typedef struct {
+    char id[16];
+    float t[ACC_N];  // -1 = not reached
+    float vmax;
+    float grade_pct;  // NAN = unknown
+    bool aborted, low_rate;
+} acc_hist_row_t;
+
+// Parses one line written by acc_hist_line() (not the header). False for anything else.
+bool acc_hist_parse(const char *line, acc_hist_row_t *row);
+
+// The end of runs.csv in buf (from_start: buf is the whole file, else its first line may be cut
+// and is skipped). Fills up to max rows, newest first; returns how many.
+int acc_hist_tail(const char *buf, size_t len, bool from_start, acc_hist_row_t *rows, int max);
+
+// Run id -> Polish local time "24.11 16:30" (CET/CEST, EU rule: summer time from the last Sunday
+// of March to the last Sunday of October, 01:00 UTC); "nr 12" for runs without a GPS date.
+void acc_hist_when(const char *id, char *out, size_t n);
+
 typedef struct {
     uint32_t runs;         // every saved run, also interrupted / 1 Hz ones
     uint16_t n[ACC_N];     // per metric: counted runs that reached it

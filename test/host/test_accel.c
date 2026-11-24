@@ -329,6 +329,79 @@ static void test_hist_ids_and_stats(void)
     CHECK(NEAR(acc_stats_sd(&s, ACC_T_0_100), 0.5, 1e-3));
 }
 
+static void test_hist_parse_and_tail(void)
+{
+    acc_result_t r;
+    memset(&r, 0, sizeof r);
+    for (int i = 0; i < ACC_N; ++i) r.t[i] = -1;
+    r.t[ACC_T_0_100] = 6.5f;
+    r.t[ACC_T_QUARTER] = 14.1f;
+    r.v_quarter = 141;
+    r.v_max = 150.4f;
+    r.grade_valid = true;
+    r.grade_pct = -2.3f;
+    char file[1024];
+    size_t len = 0;
+    len += (size_t)snprintf(file + len, sizeof file - len, "%s", acc_hist_header());
+    len += acc_hist_line(file + len, sizeof file - len, "20261124-153012", "2026-11-24 15:30:12", &r, 10);
+    r.grade_valid = false;
+    r.aborted = true;
+    r.t[ACC_T_0_100] = 3.0f;
+    len += acc_hist_line(file + len, sizeof file - len, "R000002", "", &r, 10);
+    r.aborted = false;
+    r.low_rate = true;
+    r.t[ACC_T_0_100] = 7.25f;
+    len += acc_hist_line(file + len, sizeof file - len, "20261124-160000", "2026-11-24 16:00:00", &r, 1);
+
+    acc_hist_row_t rows[8];
+    int n = acc_hist_tail(file, len, true, rows, 8);
+    CHECK(n == 3);  // header skipped
+    CHECK(strcmp(rows[0].id, "20261124-160000") == 0 && rows[0].low_rate && !rows[0].aborted);  // newest first
+    CHECK(NEAR(rows[0].t[ACC_T_0_100], 7.25, 1e-4) && isnan(rows[0].grade_pct));
+    CHECK(strcmp(rows[1].id, "R000002") == 0 && rows[1].aborted);
+    CHECK(strcmp(rows[2].id, "20261124-153012") == 0 && NEAR(rows[2].grade_pct, -2.3, 1e-4));
+    CHECK(NEAR(rows[2].t[ACC_T_QUARTER], 14.1, 1e-4) && rows[2].t[ACC_T_0_50] < 0 && NEAR(rows[2].vmax, 150.4, 0.06));
+    CHECK(acc_hist_tail(file, len, true, rows, 2) == 2 && strcmp(rows[1].id, "R000002") == 0);  // max respected
+    // a buffer cut in the middle of the first line: that line is skipped, not misread
+    const char *cut = strstr(file, "R000002") - 10;
+    n = acc_hist_tail(cut, len - (size_t)(cut - file), false, rows, 8);
+    CHECK(n == 2 && strcmp(rows[1].id, "R000002") == 0);
+    // not the file start: the first line counts as possibly cut even when it is whole
+    const char *at = strstr(file, "R000002");
+    n = acc_hist_tail(at, len - (size_t)(at - file), false, rows, 8);
+    CHECK(n == 1 && strcmp(rows[0].id, "20261124-160000") == 0);
+    acc_hist_row_t row;
+    CHECK(!acc_hist_parse(acc_hist_header(), &row));
+    CHECK(!acc_hist_parse("20261124-153012,x,abc,,,,,,,,,,,,,0,0,10", &row));
+    CHECK(!acc_hist_parse("", &row));
+}
+
+static void test_hist_when(void)
+{
+    char b[24];
+    acc_hist_when("20261124-153012", b, sizeof b);  // winter: UTC+1
+    CHECK(strcmp(b, "24.11 16:30") == 0);
+    acc_hist_when("20260715-120000", b, sizeof b);  // summer: UTC+2
+    CHECK(strcmp(b, "15.07 14:00") == 0);
+    acc_hist_when("20261231-233000", b, sizeof b);  // next day, next year
+    CHECK(strcmp(b, "01.01 00:30") == 0);
+    // 2026: summer time 29 March 01:00 UTC .. 25 October 01:00 UTC
+    acc_hist_when("20260329-005900", b, sizeof b);
+    CHECK(strcmp(b, "29.03 01:59") == 0);
+    acc_hist_when("20260329-010000", b, sizeof b);
+    CHECK(strcmp(b, "29.03 03:00") == 0);
+    acc_hist_when("20261025-005900", b, sizeof b);
+    CHECK(strcmp(b, "25.10 02:59") == 0);
+    acc_hist_when("20261025-010000", b, sizeof b);
+    CHECK(strcmp(b, "25.10 02:00") == 0);
+    acc_hist_when("20260331-230000", b, sizeof b);  // end of month in summer
+    CHECK(strcmp(b, "01.04 01:00") == 0);
+    acc_hist_when("20261130-233000", b, sizeof b);  // end of a 30-day month in winter
+    CHECK(strcmp(b, "01.12 00:30") == 0);
+    acc_hist_when("R000012", b, sizeof b);
+    CHECK(strcmp(b, "nr 12") == 0);
+}
+
 static void test_elapsed(void)
 {
     acc_state_t st;
@@ -354,6 +427,8 @@ int main(void)
     test_altitude_lost_mid_run();
     test_hist_line();
     test_hist_ids_and_stats();
+    test_hist_parse_and_tail();
+    test_hist_when();
     test_elapsed();
     printf("%d/%d checks passed\n", s_run - s_fail, s_run);
     return s_fail != 0;

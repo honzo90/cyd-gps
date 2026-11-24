@@ -44,7 +44,7 @@ Run history: every finished run (also interrupted and 1 Hz ones, marked) is appe
 `/runs/runs.csv` on the SD card, with its speed trace (10 Hz, `t_s,kmh`) in `/runs/<id>.csv`. The web
 page ("Pomiary") shows the history, a summary per metric (count, best, mean, standard deviation;
 without interrupted / 1 Hz runs), the speed chart of a run (tick two to compare them), a CSV export
-and "Usuń historię" (best times stay). The POMIAR screen shows the run count and the mean 0-100.
+and "Usuń historię" (best times stay). The POMIAR screen shows the run count and the mean 0-100; tap that line for the last runs (Polish time).
 Format in `lib/accel_core/src/acc_hist.c`, page in `src/web/runs.js` (`test/host/test_runs.mjs`).
 
 ## Wi-Fi and web page
