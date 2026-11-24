@@ -154,6 +154,7 @@ bool web_login_url(char *b, size_t n) { snprintf(b, n, "http://192.168.1.50/logi
 void web_login_cancel() {}
 void web_logout_all() {}
 int web_take_rotation() { return -1; }
+int web_take_dev() { return -1; }
 bool web_take_clear_runs() { return false; }
 
 // ---- display --------------------------------------------------------------------------------

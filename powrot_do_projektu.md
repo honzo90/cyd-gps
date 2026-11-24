@@ -41,6 +41,9 @@ nie uruchomi sieci w 15 s, CYD wraca do poprzedniej.
 
 ## Ekrany CYD (dolny pasek albo przesuwanie w lewo/prawo)
 
+Ekrany pokazują tylko proste informacje. Dane techniczne (HDOP, sygnał w dB, Hz, plik GPX, wersja,
+NTP) włącza „Tryb dewelopera” na stronie CYD, w karcie „Ekran CYD” (zapamiętany po restarcie).
+
 Po włączeniu przez 2 s widać ekran startowy (ikona, nazwa, pasek). Przytrzymanie przycisku BOOT w tym
 czasie uruchamia kalibrację dotyku (ekran o tym nie informuje, celowo).
 

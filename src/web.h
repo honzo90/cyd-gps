@@ -23,6 +23,7 @@ struct web_snapshot_t {
     float acc_grade, acc_climb;  // last run: road grade %, altitude change m; NAN = unknown
     bool acc_has_last, acc_running, acc_aborted, acc_low_rate;
     uint8_t rot;  // screen rotation 0..3 (x 90 degrees)
+    bool dev;     // developer mode: technical details on the CYD screens
 };
 
 void web_begin();                              // starts the server task (once)
@@ -38,6 +39,8 @@ void web_logout_all();
 
 // Screen rotation chosen on the page (0..3), or -1. Taken (cleared) by the loop task.
 int web_take_rotation();
+// Developer mode switched on the page: 0/1 once, -1 = no request. The loop task applies it.
+int web_take_dev();
 
 // "Delete the run history" from the page; true once. The loop task does it (accel_clear_history).
 bool web_take_clear_runs();  // forget every logged-in browser (the password keeps working)

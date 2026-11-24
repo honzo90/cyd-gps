@@ -21,6 +21,10 @@ while standing, position jumps (implied speed > 2 x receiver speed + 15 km/h) sk
 
 ## Screens (bottom bar or swipe left/right)
 
+The screens show plain words only (accuracy "dobra", local time, "Sygnal GPS: dobry"); "Tryb dewelopera"
+on the web page (card "Ekran CYD", saved in NVS) brings back HDOP, signal levels, GPS rate, GPX file,
+version and NTP.
+
 A bar at the bottom switches screens (the active one shows its name; the GPS icon is green with a fix,
 yellow while searching, red without data). Swiping works as well.
 
