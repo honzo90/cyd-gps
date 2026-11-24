@@ -427,8 +427,17 @@ static void refresh_accel(lv_timer_t *)
             snprintf(line, sizeof line, "Vmax %.0f km/h, %.0f m%s%s", a.last.v_max, a.last.dist_m, g[0] ? ", " : "", g);
         }
         lv_label_set_text(s_acc_note, line);
-    } else if (a.phase == ACC_ARMED) {
+    } else if (a.phase == ACC_ARMED && !a.stats.runs) {
         lv_label_set_text(s_acc_note, "Ruszaj - czas startuje sam");
+    } else if (a.stats.runs) {  // short statistics; the full history is on the web page
+        const float m = acc_stats_mean(&a.stats, ACC_T_0_100);
+        if (m > 0) {
+            char line[64];
+            snprintf(line, sizeof line, "Pomiary: %lu, sr. 0-100 %.2f s", (unsigned long)a.stats.runs, m);
+            lv_label_set_text(s_acc_note, line);
+        } else {
+            lv_label_set_text_fmt(s_acc_note, "Pomiary: %lu", (unsigned long)a.stats.runs);
+        }
     } else {
         lv_label_set_text(s_acc_note, "Tylko na zamknietym torze.");
     }
@@ -1008,6 +1017,9 @@ void loop()
         accel_feed(&g);
     }
     gpx_log_poll();
+    if (web_take_clear_runs()) {
+        accel_clear_history();
+    }
     const int web_rot = web_take_rotation();
     if (web_rot >= 0) {
         s_rot_req = web_rot;

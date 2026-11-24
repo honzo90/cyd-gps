@@ -2,6 +2,8 @@
 #include <math.h>
 #include <stdio.h>
 #include "accel_core.h"
+#include "acc_hist.h"
+#include <string.h>
 
 static int s_fail, s_run;
 #define CHECK(cond)                                                     \
@@ -262,6 +264,71 @@ static void test_altitude_lost_mid_run(void)
     CHECK(st.phase == ACC_DONE && st.res.dist_m > 100 && !st.res.grade_valid);
 }
 
+static void test_hist_line(void)
+{
+    acc_result_t r;
+    memset(&r, 0, sizeof r);
+    for (int i = 0; i < ACC_N; ++i) {
+        r.t[i] = -1;
+    }
+    r.t[ACC_T_0_50] = 2.345f;
+    r.t[ACC_T_0_100] = 6.5f;
+    r.t[ACC_T_100M] = 7.91f;
+    r.v_100m = 88.04f;
+    r.v_quarter = 140;  // not reached: must stay empty
+    r.v_max = 120.26f;
+    r.dist_m = 180.4f;
+    r.duration_s = 9.87f;
+    char b[256];
+    size_t l = acc_hist_line(b, sizeof b, "20261124-153012", "2026-11-24 15:30:12", &r, 10.04f);
+    CHECK(l == strlen(b));
+    CHECK(strcmp(b, "20261124-153012,2026-11-24 15:30:12,2.35,6.50,,,7.91,,88.0,,120.3,180.4,9.87,,,0,0,10.0\n") == 0);
+    // same number of columns as the header
+    int cols = 1, hcols = 1;
+    for (const char *p = b; *p; ++p) cols += *p == ',';
+    for (const char *p = acc_hist_header(); *p; ++p) hcols += *p == ',';
+    CHECK(cols == hcols);
+    r.grade_valid = true;
+    r.grade_pct = -2.34f;
+    r.climb_m = -4.2f;
+    r.aborted = true;
+    l = acc_hist_line(b, sizeof b, "R000003", "", &r, 1);
+    CHECK(l > 0 && strstr(b, ",-2.3,-4.2,1,0,1.0\n") && strncmp(b, "R000003,,", 9) == 0);
+    CHECK(acc_hist_line(b, 20, "R000003", "", &r, 1) == 0 && b[0] == 0);  // too small: nothing
+}
+
+static void test_hist_ids_and_stats(void)
+{
+    CHECK(acc_hist_valid_id("20261124-153012"));
+    CHECK(acc_hist_valid_id("R000012"));
+    CHECK(!acc_hist_valid_id("../runs.csv"));
+    CHECK(!acc_hist_valid_id("20261124-15301"));
+    CHECK(!acc_hist_valid_id("R00001x"));
+    CHECK(!acc_hist_valid_id(""));
+    CHECK(!acc_hist_valid_id(NULL));
+
+    acc_stats_t s;
+    memset(&s, 0, sizeof s);
+    CHECK(acc_stats_mean(&s, ACC_T_0_100) < 0 && acc_stats_sd(&s, ACC_T_0_100) < 0);
+    acc_result_t r;
+    memset(&r, 0, sizeof r);
+    for (int i = 0; i < ACC_N; ++i) r.t[i] = -1;
+    const float t[3] = {6.0f, 6.5f, 7.0f};
+    for (int k = 0; k < 3; ++k) {
+        r.t[ACC_T_0_100] = t[k];
+        acc_stats_add(&s, &r);
+    }
+    r.t[ACC_T_0_100] = 3.0f;  // interrupted run: counted as a run, not in the statistics
+    r.aborted = true;
+    acc_stats_add(&s, &r);
+    r.aborted = false;
+    r.low_rate = true;  // 1 Hz: same
+    acc_stats_add(&s, &r);
+    CHECK(s.runs == 5 && s.n[ACC_T_0_100] == 3 && s.n[ACC_T_0_50] == 0);
+    CHECK(NEAR(acc_stats_mean(&s, ACC_T_0_100), 6.5, 1e-4));
+    CHECK(NEAR(acc_stats_sd(&s, ACC_T_0_100), 0.5, 1e-3));
+}
+
 static void test_elapsed(void)
 {
     acc_state_t st;
@@ -285,6 +352,8 @@ int main(void)
     test_grade();
     test_grade_ignores_a_bad_start_altitude();
     test_altitude_lost_mid_run();
+    test_hist_line();
+    test_hist_ids_and_stats();
     test_elapsed();
     printf("%d/%d checks passed\n", s_run - s_fail, s_run);
     return s_fail != 0;

@@ -9,11 +9,13 @@
 #include "gh_ota.h"
 #include "gpx_log.h"
 #include "bootlog.h"
+#include "acc_hist.h"
 #include "net.h"
 
 static WebServer s_server(80);
 // "Przejazdy" view (ride list, map, speed chart): src/web/rides.js, embedded by platformio.ini.
 extern const char k_rides_js[] asm("_binary_src_web_rides_js_start");
+extern const char k_runs_js[] asm("_binary_src_web_runs_js_start");
 static portMUX_TYPE s_snap_mux = portMUX_INITIALIZER_UNLOCKED;
 static web_snapshot_t s_snap;
 static bool s_update_ok;
@@ -186,7 +188,8 @@ a.btn{border-radius:6px;border:1px solid #3a434c;background:#2a3138;color:#e8ece
 
 <h2>Pomiary przyspieszenia</h2>
 <div class="card"><table id="acc"></table>
-<small id="accnote">Na CYD: ekran POMIAR. Stań na 1 s, ruszaj — czas startuje sam. Tylko na zamkniętym torze.</small></div>
+<small id="accnote">Na CYD: ekran POMIAR. Stań na 1 s, ruszaj — czas startuje sam. Tylko na zamkniętym torze.</small>
+<div id="runs"></div></div>
 <h2>Przejazdy</h2>
 <div class="card" id="rides"><div class="k">…</div></div>
 <div id="ride" hidden></div>
@@ -219,6 +222,7 @@ a.btn{border-radius:6px;border:1px solid #3a434c;background:#2a3138;color:#e8ece
 </div>
 
 <script src="/rides.js?v=)HTML" FW_VERSION R"HTML("></script>
+<script src="/runs.js?v=)HTML" FW_VERSION R"HTML("></script>
 <script>
 const $=id=>document.getElementById(id);
 const fmtKm=v=>v.toFixed(2)+' km';
@@ -262,6 +266,7 @@ $('up').onclick=()=>{const f=$('fw').files[0];if(!f){return;}
  x.open('POST','/update');x.send(fd);};
 live();setInterval(live,1000);
 if(window.CydRides)CydRides.init();else $('rides').textContent='Nie udało się wczytać widoku przejazdów.';
+if(window.CydRuns)CydRuns.init($('runs'));
 </script></body></html>)HTML";
 
 static bool auth()
@@ -583,6 +588,73 @@ int web_take_rotation()
     return r;
 }
 
+// ---- acceleration run history (files written by src/accel.cpp) ----------------------------
+static volatile bool s_clear_runs;
+
+bool web_take_clear_runs()
+{
+    const bool r = s_clear_runs;
+    s_clear_runs = false;
+    return r;
+}
+
+static void handle_runs_js()
+{
+    if (!auth()) {
+        return;
+    }
+    s_server.sendHeader("Cache-Control", "private, max-age=3600");
+    s_server.send_P(200, "application/javascript; charset=utf-8", k_runs_js);
+}
+
+// GET /api/runs: the run list (CSV); ?dl=1 as a download (export to a spreadsheet)
+static void handle_runs()
+{
+    if (!auth()) {
+        return;
+    }
+    if (s_server.hasArg("dl")) {
+        s_server.sendHeader("Content-Disposition", "attachment; filename=\"pomiary.csv\"");
+    }
+    File f = SD.open("/runs/runs.csv", FILE_READ);
+    if (!f) {
+        s_server.send(200, "text/csv; charset=utf-8", acc_hist_header());  // no runs yet
+        return;
+    }
+    s_server.streamFile(f, "text/csv; charset=utf-8");
+    f.close();
+}
+
+// GET /api/run?id=20261124-153012: speed trace of one run (t_s,kmh)
+static void handle_run()
+{
+    if (!auth()) {
+        return;
+    }
+    const String id = s_server.arg("id");
+    if (!acc_hist_valid_id(id.c_str())) {
+        s_server.send(400, "text/plain", "bad id");
+        return;
+    }
+    File f = SD.open("/runs/" + id + ".csv", FILE_READ);
+    if (!f) {
+        s_server.send(404, "text/plain", "not found");
+        return;
+    }
+    s_server.sendHeader("Cache-Control", "private, max-age=86400");  // a saved trace never changes
+    s_server.streamFile(f, "text/csv; charset=utf-8");
+    f.close();
+}
+
+static void handle_runs_clear()
+{
+    if (!auth()) {
+        return;
+    }
+    s_clear_runs = true;
+    s_server.send(200, "text/plain", "ok");
+}
+
 static void handle_rotate()
 {
     if (!auth()) {
@@ -638,6 +710,10 @@ void web_begin()
     s_server.on("/login", HTTP_GET, handle_login);
     s_server.on("/", HTTP_GET, handle_root);
     s_server.on("/rides.js", HTTP_GET, handle_rides_js);
+    s_server.on("/runs.js", HTTP_GET, handle_runs_js);
+    s_server.on("/api/runs", HTTP_GET, handle_runs);
+    s_server.on("/api/run", HTTP_GET, handle_run);
+    s_server.on("/api/runs/clear", HTTP_POST, handle_runs_clear);
     s_server.on("/api/status", HTTP_GET, handle_status);
     s_server.on("/api/files", HTTP_GET, handle_files);
     s_server.on("/api/delete", HTTP_POST, handle_delete);

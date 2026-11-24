@@ -11,6 +11,7 @@ void gpx_log_feed(const gps_data_t *g);  // call for every new fix
 void gpx_log_poll();                     // call from loop(): time-based flush
 void gpx_log_new_track();                // close the current file; the next good fix opens a new one
 void gpx_log_status(char *buf, size_t n);  // one line for the UI
+bool gpx_log_sd_ok();                    // card mounted (also used by the run history in /runs)
 // Name ("20261123-114602.gpx") of the file being written, "" if none; returns the point count.
 uint32_t gpx_log_current(char *name, size_t n);
 

@@ -37,4 +37,7 @@ void web_login_cancel();
 void web_logout_all();
 
 // Screen rotation chosen on the page (0..3), or -1. Taken (cleared) by the loop task.
-int web_take_rotation();  // forget every logged-in browser (the password keeps working)
+int web_take_rotation();
+
+// "Delete the run history" from the page; true once. The loop task does it (accel_clear_history).
+bool web_take_clear_runs();  // forget every logged-in browser (the password keeps working)

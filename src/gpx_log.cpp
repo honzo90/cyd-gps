@@ -23,6 +23,11 @@ static char s_pending[2048];  // points not yet on the card
 static size_t s_pending_len;
 static uint32_t s_last_flush;
 
+bool gpx_log_sd_ok()
+{
+    return s_mounted;
+}
+
 static bool mount()
 {
     s_spi.begin(SD_SCK, SD_MISO, SD_MOSI, SD_SS);

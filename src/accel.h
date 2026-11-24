@@ -2,6 +2,7 @@
 // keeps the best times in NVS ("acc"), written only when a record improves.
 #pragma once
 #include "accel_core.h"
+#include "acc_hist.h"
 #include "gps.h"
 
 struct accel_view_t {
@@ -14,6 +15,7 @@ struct accel_view_t {
     float best_grade[ACC_N];          // road grade (%) of the run that set each best; NAN = unknown
     float rate_hz;
     bool sample_ok;      // fix good enough to time
+    acc_stats_t stats;   // all saved runs: count, per-metric mean and spread
 };
 
 void accel_begin();
@@ -21,3 +23,6 @@ void accel_feed(const gps_data_t *g);  // from loop() for every new GPS epoch (s
 void accel_get(accel_view_t *v);
 void accel_reset_best();
 void accel_restart();  // drop the current run / last result, wait for a new start
+// Every finished run is appended to /runs/runs.csv on the SD card, its speed trace (10 Hz) goes to
+// /runs/<id>.csv. Clears both and the statistics (loop task only; the web page asks through main).
+void accel_clear_history();
