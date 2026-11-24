@@ -402,7 +402,7 @@ static void refresh_accel(lv_timer_t *)
     fmt_time(b, sizeof b, a.phase == ACC_RUNNING || a.has_last ? a.elapsed_s : 0);
     lv_label_set_text(s_acc_clock, b);
     lv_obj_set_style_text_color(s_acc_clock, lv_color_hex(a.phase == ACC_RUNNING ? 0xFF7A1A : 0xFFFFFF), 0);
-    lv_label_set_text_fmt(s_acc_speed, "%d km/h  %.0f Hz", (int)(g.spd_kmh + 0.5f), a.rate_hz);
+    lv_label_set_text_fmt(s_acc_speed, "%d km/h %.0fHz", (int)(g.spd_kmh + 0.5f), a.rate_hz);
 
     for (int i = 0; i < ACC_N; ++i) {
         fmt_time(b, sizeof b, a.has_last ? a.last.t[i] : -1);
@@ -575,19 +575,22 @@ static void build_accel_screen(lv_obj_t *t)
     s_acc_status = make_status(t);
 
     s_acc_clock = make_label(t, &lv_font_montserrat_32, 0xFFFFFF, 12, 38 + dy(), "0.00 s");
-    s_acc_speed = make_label(t, &lv_font_montserrat_14, k_caption, s_port ? 12 : 130, s_port ? 100 : 52, "");
+    s_acc_speed = make_label(t, &lv_font_montserrat_14, k_caption, s_port ? 12 : 122, s_port ? 100 : 52, "");
 
-    // Restart: drop the current run or the last result, then stand 1 s and go again
-    lv_obj_t *rb = lv_button_create(t);
-    lv_obj_set_size(rb, 84, 34);
-    lv_obj_align(rb, LV_ALIGN_TOP_RIGHT, s_port ? -8 : -10, s_port ? 64 : 40);
-    lv_obj_set_style_bg_color(rb, lv_color_hex(0x2A3138), 0);
-    lv_obj_set_style_bg_color(rb, lv_color_hex(0x8A2E2E), LV_STATE_PRESSED);
-    lv_obj_t *rl = lv_label_create(rb);
-    lv_label_set_text(rl, LV_SYMBOL_REFRESH " Restart");
-    lv_obj_set_style_text_font(rl, &lv_font_montserrat_14, 0);
-    lv_obj_center(rl);
-    lv_obj_add_event_cb(rb, on_acc_restart, LV_EVENT_CLICKED, NULL);
+    // Two icon buttons top right: list of the last runs, and restart (drop the current run or the
+    // last result, then stand 1 s and go again).
+    for (int b = 0; b < 2; ++b) {
+        lv_obj_t *btn = lv_button_create(t);
+        lv_obj_set_size(btn, 46, 34);
+        lv_obj_align(btn, LV_ALIGN_TOP_RIGHT, (s_port ? -8 : -10) - (b ? 0 : 50), s_port ? 64 : 40);
+        lv_obj_set_style_bg_color(btn, lv_color_hex(0x2A3138), 0);
+        lv_obj_set_style_bg_color(btn, lv_color_hex(b ? 0x8A2E2E : 0x3A4550), LV_STATE_PRESSED);
+        lv_obj_t *l = lv_label_create(btn);
+        lv_label_set_text(l, b ? LV_SYMBOL_REFRESH : LV_SYMBOL_LIST);
+        lv_obj_set_style_text_font(l, &lv_font_montserrat_20, 0);
+        lv_obj_center(l);
+        lv_obj_add_event_cb(btn, b ? on_acc_restart : on_runs_open, LV_EVENT_CLICKED, NULL);
+    }
 
     for (int i = 0; i < ACC_N; ++i) {
         if (s_port) {  // name with the best time under it, value on the right

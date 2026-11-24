@@ -46,10 +46,10 @@ nie uruchomi sieci w 15 s, CYD wraca do poprzedniej.
 2. **POMIAR** — 0–50, 0–100, 0–200, 100–200 km/h, 100 m, 1/4 mili, plus nachylenie drogi
    (pod górę / z górki, z wysokości GPS, orientacyjnie ±1–2 %, od 50 m przejazdu; przy rekordach na
    stronie widać, na jakiej drodze padły). Stań na 1 s, ruszaj — czas startuje
-   sam. „Restart” zeruje bieżący pomiar; przytrzymanie tytułu „POMIAR” kasuje najlepsze wyniki.
+   sam. Przycisk ⟳ (restart) zeruje bieżący pomiar; przytrzymanie tytułu „POMIAR” kasuje najlepsze wyniki.
    GPS pracuje wtedy z częstotliwością 10 Hz. Tylko na zamkniętym torze lub placu.
    Każdy pomiar zapisuje się na kartę SD (`/runs/runs.csv` i przebieg prędkości `/runs/<id>.csv`).
-   Na dole ekranu: liczba pomiarów i średnie 0–100; dotknięcie tej linii pokazuje listę ostatnich
+   Na dole ekranu: liczba pomiarów i średnie 0–100; przycisk ≡ (obok ⟳ restartu) albo dotknięcie tej linii pokazuje listę ostatnich
    pomiarów (czas polski, 0–100, 1/4 mili, Vmax, nachylenie lub „przerw.”). Na stronie, w sekcji „Pomiary”: historia,
    podsumowanie (najlepszy, średni, rozrzut), wykres prędkości (zaznacz dwa, aby porównać),
    „Eksport CSV” (do Excela) i „Usuń historię” (najlepsze wyniki zostają).
